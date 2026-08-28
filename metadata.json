@@ -1,0 +1,6 @@
+{
+  "name": "SteezeVotes",
+  "description": "Multi-organizer web-based voting and contest platform for the Ghanaian events market by Rooted Steeze Studios.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
