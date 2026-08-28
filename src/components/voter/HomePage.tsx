@@ -37,11 +37,13 @@ export const HomePage: React.FC<HomePageProps> = ({
   const categories = ['All', 'Music & Entertainment', 'Nightlife & Culture', 'Pageantry & Fashion'];
 
   const filteredContests = contests.filter((c) => {
+    // Only active or closed contests are visible to the public (pending contests remain hidden)
+    const isPublic = c.status === 'active' || c.status === 'closed';
     const matchesCat = selectedCategory === 'All' || c.category === selectedCategory;
     const matchesSearch = c.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
                           c.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
                           c.organizerName.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesCat && matchesSearch;
+    return isPublic && matchesCat && matchesSearch;
   });
 
   const getNomineeCount = (contestId: string) => {
@@ -108,48 +110,16 @@ export const HomePage: React.FC<HomePageProps> = ({
               </div>
 
               {/* Supported Networks */}
-              <p className="text-xs text-gray-500 flex items-center justify-center gap-2 pt-1">
-                <span>Instant payment via:</span>
-                <span className="font-semibold text-gray-700">MTN MoMo</span>
-                <span>•</span>
-                <span className="font-semibold text-gray-700">Telecel Cash</span>
-                <span>•</span>
-                <span className="font-semibold text-gray-700">AT Money</span>
-              </p>
             </div>
 
           </div>
         </div>
       </section>
 
-      {/* Feature Highlights — 4 Simple Pillars */}
+      {/* Feature Highlights — Simple Pillars */}
       <section className="py-12 bg-white border-b border-gray-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            
-            <div className="p-5 rounded-2xl bg-gray-50/70 border border-gray-100 hover:border-gray-200 transition-all">
-              <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center mb-3.5">
-                <CheckCircle2 className="w-5 h-5" />
-              </div>
-              <h3 className="text-sm font-bold text-gray-900 mb-1">
-                Verified Free Votes
-              </h3>
-              <p className="text-xs text-gray-600 leading-relaxed">
-                Every Ghana phone number gets 1 free vote verified with fast SMS OTP.
-              </p>
-            </div>
-
-            <div className="p-5 rounded-2xl bg-gray-50/70 border border-gray-100 hover:border-gray-200 transition-all">
-              <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center mb-3.5">
-                <Smartphone className="w-5 h-5" />
-              </div>
-              <h3 className="text-sm font-bold text-gray-900 mb-1">
-                Instant MoMo Bundles
-              </h3>
-              <p className="text-xs text-gray-600 leading-relaxed">
-                Buy vote packages on MTN MoMo, Telecel Cash, or AT Money in seconds.
-              </p>
-            </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 max-w-3xl mx-auto">
 
             <div className="p-5 rounded-2xl bg-gray-50/70 border border-gray-100 hover:border-gray-200 transition-all">
               <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center mb-3.5">
@@ -366,7 +336,7 @@ export const HomePage: React.FC<HomePageProps> = ({
                 Host your awards, pageants, or talent contests on SteezeVotes
               </h2>
               <p className="text-sm text-gray-300 leading-relaxed">
-                Enjoy 90% instant Mobile Money payouts, zero setup fees, real-time leaderboard displays, and exportable voter contacts.
+                Enjoy fast Mobile Money payouts, zero setup fees, real-time leaderboard displays, and exportable voter contacts.
               </p>
             </div>
 

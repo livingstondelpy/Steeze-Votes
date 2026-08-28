@@ -74,14 +74,6 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate, onOpenTrustModal }) 
                   How Voting Works
                 </button>
               </li>
-              <li>
-                <button
-                  onClick={onOpenTrustModal}
-                  className="hover:text-amber-600 transition-colors text-left text-amber-600 font-medium"
-                >
-                  One-Phone Free Vote Guarantee
-                </button>
-              </li>
             </ul>
           </div>
 
@@ -107,22 +99,6 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate, onOpenTrustModal }) 
                   Organizer Log In
                 </button>
               </li>
-              <li>
-                <button
-                  onClick={() => onNavigate('organizer', 'organizer')}
-                  className="hover:text-amber-600 transition-colors text-left"
-                >
-                  90% MoMo Payout Terms
-                </button>
-              </li>
-              <li>
-                <button
-                  onClick={() => onNavigate('organizer', 'organizer')}
-                  className="hover:text-amber-600 transition-colors text-left"
-                >
-                  Voter Contacts Export
-                </button>
-              </li>
             </ul>
           </div>
 
@@ -145,7 +121,7 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate, onOpenTrustModal }) 
                   onClick={() => onNavigate('how-it-works', 'voter')}
                   className="hover:text-amber-600 transition-colors text-left"
                 >
-                  24-Hour Dispute Escrow
+                  24-Hour Payout Protection
                 </button>
               </li>
               <li>

@@ -34,6 +34,7 @@ interface RssAdminPortalProps {
   anomalies: AnomalyAlert[];
   onSelectContestForPreview: (contestId: string) => void;
   onBackToHome?: () => void;
+  onLogout?: () => void;
 }
 
 export const RssAdminPortal: React.FC<RssAdminPortalProps> = ({
@@ -45,10 +46,20 @@ export const RssAdminPortal: React.FC<RssAdminPortalProps> = ({
   anomalies,
   onSelectContestForPreview,
   onBackToHome,
+  onLogout,
 }) => {
-  const [activeAdminTab, setActiveAdminTab] = useState<'overview' | 'anomalies' | 'disputes' | 'organizers' | 'audit'>('overview');
+  const [activeAdminTab, setActiveAdminTab] = useState<'overview' | 'review' | 'anomalies' | 'disputes' | 'organizers' | 'settings' | 'audit'>('overview');
   const [anomalyResolutionNote, setAnomalyResolutionNote] = useState('');
   const [selectedAnomalyId, setSelectedAnomalyId] = useState<string | null>(null);
+  const [rejectReasonInput, setRejectReasonInput] = useState<{ [key: string]: string }>({});
+  const [reconcileTxId, setReconcileTxId] = useState('');
+  const [reconcileMsg, setReconcileMsg] = useState<{ success: boolean; message: string } | null>(null);
+
+  // System settings state from store
+  const systemSettings = store.systemSettings;
+
+  // Pending contests review queue
+  const pendingContests = contests.filter((c) => c.status === 'pending_review');
 
   // Platform wide metrics calculation
   const totalPlatformPaidGmv = transactions
@@ -87,6 +98,23 @@ export const RssAdminPortal: React.FC<RssAdminPortalProps> = ({
     }
   };
 
+  const handleApproveContest = (contestId: string) => {
+    store.approveContest(contestId);
+  };
+
+  const handleRejectContest = (contestId: string) => {
+    const reason = rejectReasonInput[contestId] || 'Content did not meet platform safety or branding guidelines.';
+    store.rejectContest(contestId, reason);
+  };
+
+  const handleManualReconcile = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reconcileTxId.trim()) return;
+    const res = store.reconcilePayment(reconcileTxId.trim());
+    setReconcileMsg(res);
+    setReconcileTxId('');
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900 py-8 px-4 sm:px-6 lg:px-8">
       <div className="max-w-7xl mx-auto space-y-6">
@@ -111,14 +139,19 @@ export const RssAdminPortal: React.FC<RssAdminPortalProps> = ({
               </span>
             </div>
             <p className="text-xs text-gray-500">
-              Escrow supervisory console, fraud anomaly detection, 10% platform revenue ledger, and dispute management.
+              RSS Admin control panel: approve contests, check platform earnings, monitor fraud alerts, and manage settings.
             </p>
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs font-semibold text-emerald-800">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600" /> All Systems Live
-            </span>
+            {onLogout && (
+              <button
+                onClick={onLogout}
+                className="px-3.5 py-1.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold transition-colors shadow-xs"
+              >
+                Log Out Admin
+              </button>
+            )}
           </div>
         </div>
 
@@ -136,6 +169,23 @@ export const RssAdminPortal: React.FC<RssAdminPortalProps> = ({
           </button>
 
           <button
+            onClick={() => setActiveAdminTab('review')}
+            className={`px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-colors flex items-center gap-1.5 ${
+              activeAdminTab === 'review'
+                ? 'bg-amber-500 text-white shadow-xs'
+                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+            }`}
+          >
+            <FileCheck className="w-4 h-4" />
+            Review Queue
+            {pendingContests.length > 0 && (
+              <span className="px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-900 text-[10px] font-bold">
+                {pendingContests.length}
+              </span>
+            )}
+          </button>
+
+          <button
             onClick={() => setActiveAdminTab('anomalies')}
             className={`px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-colors flex items-center gap-1.5 ${
               activeAdminTab === 'anomalies'
@@ -144,7 +194,7 @@ export const RssAdminPortal: React.FC<RssAdminPortalProps> = ({
             }`}
           >
             <AlertTriangle className="w-4 h-4" />
-            Fraud & Spikes ({unresolvedAnomalies.length})
+            Fraud &amp; Spikes ({unresolvedAnomalies.length})
           </button>
 
           <button
@@ -155,7 +205,7 @@ export const RssAdminPortal: React.FC<RssAdminPortalProps> = ({
                 : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
             }`}
           >
-            <Scale className="w-4 h-4" /> Escrow & Contests
+            <Scale className="w-4 h-4" /> Escrow &amp; Contests
           </button>
 
           <button
@@ -166,7 +216,18 @@ export const RssAdminPortal: React.FC<RssAdminPortalProps> = ({
                 : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
             }`}
           >
-            <Users className="w-4 h-4" /> Organizers & MoMo Wallets
+            <Users className="w-4 h-4" /> Organizers &amp; MoMo Wallets
+          </button>
+
+          <button
+            onClick={() => setActiveAdminTab('settings')}
+            className={`px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-colors flex items-center gap-1.5 ${
+              activeAdminTab === 'settings'
+                ? 'bg-amber-500 text-white shadow-xs'
+                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+            }`}
+          >
+            <Lock className="w-4 h-4" /> Platform Controls &amp; Settings
           </button>
 
           <button
@@ -177,7 +238,7 @@ export const RssAdminPortal: React.FC<RssAdminPortalProps> = ({
                 : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
             }`}
           >
-            <ShieldCheck className="w-4 h-4" /> Immutable Audit Ledger
+            <ShieldCheck className="w-4 h-4" /> Audit &amp; Verification Log
           </button>
         </div>
 
@@ -197,7 +258,7 @@ export const RssAdminPortal: React.FC<RssAdminPortalProps> = ({
               <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-xs space-y-1">
                 <span className="text-xs font-semibold text-gray-500 uppercase">RSS 10% Commission Earned</span>
                 <p className="text-2xl font-bold text-amber-600">GHS {totalRssCommissionGhs.toFixed(2)}</p>
-                <p className="text-[11px] text-gray-500">Net platform revenue after escrow</p>
+                <p className="text-[11px] text-gray-500">Net 10% platform earnings</p>
               </div>
 
               <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-xs space-y-1">
@@ -368,12 +429,208 @@ export const RssAdminPortal: React.FC<RssAdminPortalProps> = ({
           </div>
         )}
 
+        {/* TAB: REVIEW QUEUE */}
+        {activeAdminTab === 'review' && (
+          <div className="bg-white rounded-3xl border border-gray-200 p-6 sm:p-8 shadow-xs space-y-6">
+            <div>
+              <h2 className="text-xl font-bold text-gray-900">Pending Contest Review Queue</h2>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Content Moderation: Review organizer contest titles, flyers, descriptions, and code prefixes before approving them live to voters.
+              </p>
+            </div>
+
+            {pendingContests.length === 0 ? (
+              <div className="text-center py-12 bg-gray-50 rounded-2xl border border-dashed border-gray-200 space-y-2">
+                <CheckCircle2 className="w-8 h-8 text-emerald-600 mx-auto" />
+                <h3 className="text-sm font-bold text-gray-900">Review Queue Empty</h3>
+                <p className="text-xs text-gray-500">All published contests have been reviewed and approved.</p>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {pendingContests.map((c) => (
+                  <div key={c.id} className="p-6 rounded-2xl bg-gray-50 border border-gray-200 space-y-4">
+                    <div className="flex flex-col md:flex-row md:items-start gap-4">
+                      {/* Banner Flyer */}
+                      <div className="w-full md:w-48 h-32 rounded-xl bg-gray-200 border border-gray-300 overflow-hidden shrink-0 relative">
+                        <img src={c.bannerUrl} alt={c.title} className="w-full h-full object-cover" />
+                      </div>
+
+                      <div className="flex-1 space-y-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                            c.contestType === 'free' ? 'bg-blue-100 text-blue-800' : 'bg-amber-100 text-amber-800'
+                          }`}>
+                            {c.contestType === 'free' ? '100% Free Voting' : `Paid (GHS ${c.pricePerVote.toFixed(2)}/vote)`}
+                          </span>
+                          <span className="px-2.5 py-0.5 rounded-full bg-purple-100 text-purple-800 text-[10px] font-bold">
+                            Prefix: {c.codePrefix || 'N/A'}
+                          </span>
+                          <span className="text-xs font-semibold text-gray-500">{c.category}</span>
+                        </div>
+
+                        <h3 className="text-base font-bold text-gray-900">{c.title}</h3>
+                        <p className="text-xs text-gray-700 leading-relaxed line-clamp-2">{c.description}</p>
+                        <p className="text-xs text-gray-500">Organizer: <strong>{c.organizerName}</strong></p>
+                      </div>
+                    </div>
+
+                    {/* Action buttons */}
+                    <div className="pt-3 border-t border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="flex items-center gap-2 w-full sm:w-auto">
+                        <input
+                          type="text"
+                          placeholder="Reason if rejecting..."
+                          value={rejectReasonInput[c.id] || ''}
+                          onChange={(e) => setRejectReasonInput({ ...rejectReasonInput, [c.id]: e.target.value })}
+                          className="px-3 py-1.5 bg-white border border-gray-300 rounded-xl text-xs w-full sm:w-64 focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                        />
+                        <button
+                          onClick={() => handleRejectContest(c.id)}
+                          className="px-3.5 py-1.5 bg-red-100 hover:bg-red-200 text-red-700 font-semibold text-xs rounded-xl transition-colors shrink-0"
+                        >
+                          Reject
+                        </button>
+                      </div>
+
+                      <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                        <button
+                          onClick={() => onSelectContestForPreview(c.id)}
+                          className="px-3.5 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold text-xs rounded-xl transition-colors"
+                        >
+                          Preview Contest
+                        </button>
+                        <button
+                          onClick={() => handleApproveContest(c.id)}
+                          className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs rounded-xl shadow-xs transition-colors flex items-center gap-1.5"
+                        >
+                          <CheckCircle2 className="w-4 h-4" /> Approve &amp; Publish Live
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* TAB: SYSTEM SETTINGS & MAINTENANCE MODE */}
+        {activeAdminTab === 'settings' && (
+          <div className="bg-white rounded-3xl border border-gray-200 p-6 sm:p-8 shadow-xs space-y-8">
+            <div>
+              <h2 className="text-xl font-bold text-gray-900">Platform Controls &amp; Settings</h2>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Adjust contest caps, toggle maintenance mode, and fix stuck payments.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Max Active Contests Cap Setting */}
+              <div className="p-6 rounded-2xl bg-gray-50 border border-gray-200 space-y-4">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 rounded-xl bg-amber-100 text-amber-700">
+                    <Trophy className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-gray-900">Max Active Contests per Organizer</h3>
+                    <p className="text-xs text-gray-500">Platform-wide cap on simultaneous live contests per organizer account.</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <input
+                    type="number"
+                    min="1"
+                    max="50"
+                    value={systemSettings.maxActiveContestsPerOrganizer}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value) || 1;
+                      store.updateSystemSettings({ maxActiveContestsPerOrganizer: val });
+                    }}
+                    className="w-24 px-3 py-2 bg-white border border-gray-300 rounded-xl text-sm font-bold text-gray-900 focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                  />
+                  <span className="text-xs text-gray-600">Active Contests Limit (Default: 4)</span>
+                </div>
+              </div>
+
+              {/* Maintenance Mode Kill Switch */}
+              <div className="p-6 rounded-2xl bg-gray-50 border border-gray-200 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className={`p-2 rounded-xl ${systemSettings.maintenanceMode ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                      <Lock className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-gray-900">Platform Maintenance Kill Switch</h3>
+                      <p className="text-xs text-gray-500">Locks public site and displays maintenance notice.</p>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => store.updateSystemSettings({ maintenanceMode: !systemSettings.maintenanceMode })}
+                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-xs ${
+                      systemSettings.maintenanceMode
+                        ? 'bg-red-600 text-white hover:bg-red-700'
+                        : 'bg-emerald-600 text-white hover:bg-emerald-700'
+                    }`}
+                  >
+                    {systemSettings.maintenanceMode ? 'MAINTENANCE ACTIVE' : 'SYSTEMS NORMAL'}
+                  </button>
+                </div>
+
+                <p className="text-xs text-gray-600 bg-white p-3 rounded-xl border border-gray-200">
+                  Status: {systemSettings.maintenanceMode ? (
+                    <strong className="text-red-700">ENABLED — Public site displays maintenance screen. Admin panel remains accessible.</strong>
+                  ) : (
+                    <strong className="text-emerald-700">DISABLED — Public site is fully operational for voters &amp; organizers.</strong>
+                  )}
+                </p>
+              </div>
+            </div>
+
+            {/* Manual Payment Reconciliation Tool */}
+            <div className="p-6 rounded-2xl bg-amber-50/70 border border-amber-200 space-y-4">
+              <div className="flex items-center gap-2">
+                <RefreshCw className="w-5 h-5 text-amber-700" />
+                <h3 className="text-sm font-bold text-amber-950">Paystack Transaction Reconciliation Tool</h3>
+              </div>
+              <p className="text-xs text-amber-900 leading-relaxed">
+                If a voter reports a successful Mobile Money payment that failed to credit automatically due to a dropped connection, paste the payment reference ID below to auto-verify and credit votes immediately.
+              </p>
+
+              <form onSubmit={handleManualReconcile} className="flex flex-col sm:flex-row gap-2">
+                <input
+                  type="text"
+                  placeholder="Paste transaction ID or Receipt (e.g. STZ-GH-889312 or tx-101)..."
+                  value={reconcileTxId}
+                  onChange={(e) => setReconcileTxId(e.target.value)}
+                  className="flex-1 px-4 py-2 bg-white border border-gray-300 rounded-xl text-xs font-mono focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                />
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl transition-colors shadow-xs"
+                >
+                  Reconcile &amp; Credit Votes
+                </button>
+              </form>
+
+              {reconcileMsg && (
+                <div className={`p-3 rounded-xl text-xs font-medium ${
+                  reconcileMsg.success ? 'bg-emerald-100 text-emerald-900 border border-emerald-300' : 'bg-red-100 text-red-900 border border-red-300'
+                }`}>
+                  {reconcileMsg.message}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* TAB 3: DISPUTES & ESCROW */}
         {activeAdminTab === 'disputes' && (
           <div className="bg-white rounded-3xl border border-gray-200 p-6 sm:p-8 shadow-xs space-y-6">
             <div>
               <h2 className="text-xl font-bold text-gray-900">Escrow Holds & Dispute Control</h2>
-              <p className="text-xs text-gray-500 mt-0.5">Manage 24-hour post-contest settlement escrow releases and emergency holds.</p>
+              <p className="text-xs text-gray-500 mt-0.5">Manage 24-hour post-contest payouts and holds.</p>
             </div>
 
             <div className="divide-y divide-gray-100">
@@ -394,7 +651,7 @@ export const RssAdminPortal: React.FC<RssAdminPortalProps> = ({
                         onClick={() => handleReleaseEscrow(c.id)}
                         className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl text-xs shadow-xs"
                       >
-                        Release 90% Escrow
+                        Release Organizer Payout
                       </button>
                       <button
                         onClick={() => handleSuspendContest(c.id)}
@@ -442,8 +699,8 @@ export const RssAdminPortal: React.FC<RssAdminPortalProps> = ({
         {activeAdminTab === 'audit' && (
           <div className="bg-white rounded-3xl border border-gray-200 p-6 sm:p-8 shadow-xs space-y-6">
             <div>
-              <h2 className="text-xl font-bold text-gray-900">Immutable Ballot Audit Ledger</h2>
-              <p className="text-xs text-gray-500 mt-0.5">Every cast vote with cryptographic sha256 phone hash, receipt code, and server timestamp.</p>
+              <h2 className="text-xl font-bold text-gray-900">Master Audit &amp; Verification Log</h2>
+              <p className="text-xs text-gray-500 mt-0.5">Every cast vote with secure phone hash, receipt code, and server timestamp.</p>
             </div>
 
             <div className="overflow-x-auto">

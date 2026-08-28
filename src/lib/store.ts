@@ -1,4 +1,4 @@
-import { Contest, Nominee, VoteRecord, Transaction, OrganizerAccount, AnomalyAlert, MomoNetwork, BundleTier } from '../types';
+import { Contest, Nominee, VoteRecord, Transaction, OrganizerAccount, AnomalyAlert, MomoNetwork, BundleTier, SystemSettings } from '../types';
 
 // Simple deterministic hash for phone privacy and 1-free-vote enforcement
 export function hashPhoneNumber(phone?: string): string {
@@ -38,6 +38,7 @@ export const INITIAL_ORGANIZERS: OrganizerAccount[] = [
   {
     id: 'org-rss-01',
     email: 'events@rootedsteeze.com',
+    password: 'demo123',
     organizationName: 'Rooted Steeze Studios (RSS)',
     contactPhone: '+233244123456',
     momoNumber: '0244123456',
@@ -48,6 +49,7 @@ export const INITIAL_ORGANIZERS: OrganizerAccount[] = [
   {
     id: 'org-echohouse-02',
     email: 'awards@echohousegh.com',
+    password: 'demo123',
     organizationName: 'Echo House Events Ghana',
     contactPhone: '+233201987654',
     momoNumber: '0201987654',
@@ -58,6 +60,7 @@ export const INITIAL_ORGANIZERS: OrganizerAccount[] = [
   {
     id: 'org-charter-03',
     email: 'info@charterhouseghana.com',
+    password: 'demo123',
     organizationName: 'Charterhouse Live',
     contactPhone: '+233261112233',
     momoNumber: '0261112233',
@@ -82,6 +85,8 @@ export const INITIAL_CONTESTS: Contest[] = [
     sponsorName: 'Guinness Ghana & Joy Prime',
     startDate: new Date(Date.now() - 3 * 24 * 3600 * 1000).toISOString(),
     endDate: new Date(Date.now() + 4 * 24 * 3600 * 1000 + 14 * 3600 * 1000).toISOString(), // 4.5 days remaining
+    contestType: 'paid',
+    codePrefix: 'STZ',
     pricePerVote: 1.00,
     bundleTiers: [
       { id: 'b-1', votes: 1, priceGhs: 1.00, label: 'Single Vote' },
@@ -105,13 +110,15 @@ export const INITIAL_CONTESTS: Contest[] = [
     organizerId: 'org-echohouse-02',
     organizerName: 'Echo House Events Ghana',
     title: 'Accra Nightlife Awards 2026: Best Club DJ of the Year',
-    description: 'Celebrating the sound masters igniting Osu, East Legon, and Labadi nights. 1 free phone-verified vote plus unlimited bundle voting via MTN MoMo, Telecel and AT Cash.',
+    description: 'Celebrating the sound masters igniting Osu, East Legon, and Labadi nights. 1 free phone-verified vote plus optional bundle voting via MTN MoMo, Telecel and AT Cash.',
     category: 'Nightlife & Culture',
     bannerUrl: 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&w=1600&q=80',
     sponsorLogoUrl: '',
     sponsorName: 'Club Shandy Ghana',
     startDate: new Date(Date.now() - 5 * 24 * 3600 * 1000).toISOString(),
     endDate: new Date(Date.now() + 2 * 24 * 3600 * 1000).toISOString(),
+    contestType: 'paid',
+    codePrefix: 'DJ',
     pricePerVote: 1.50,
     bundleTiers: [
       { id: 'dj-5', votes: 5, priceGhs: 7.50, label: '5 Votes' },
@@ -126,6 +133,28 @@ export const INITIAL_CONTESTS: Contest[] = [
     updatedAt: '2026-08-27T08:00:00Z',
   },
   {
+    id: 'contest-campus-free-2026',
+    slug: 'ghana-youth-leadership-free-vote-2026',
+    organizerId: 'org-rss-01',
+    organizerName: 'Rooted Steeze Studios (RSS)',
+    title: 'Ghana National Youth Leadership Awards (100% Free Voting)',
+    description: 'Strictly 1 free OTP-verified SMS vote per Ghanaian voter. Zero paid vote bundles, zero commission. Transparent public community choice award.',
+    category: 'Leadership & Innovation',
+    bannerUrl: 'https://images.unsplash.com/photo-1523240795612-9a054b0db644?auto=format&fit=crop&w=1600&q=80',
+    startDate: new Date(Date.now() - 2 * 24 * 3600 * 1000).toISOString(),
+    endDate: new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString(),
+    contestType: 'free',
+    codePrefix: 'YL',
+    pricePerVote: 0.00,
+    bundleTiers: [],
+    showPublicResults: true,
+    collectVoterContacts: true,
+    status: 'active',
+    escrowReleased: true,
+    createdAt: '2026-08-25T11:00:00Z',
+    updatedAt: '2026-08-27T10:00:00Z',
+  },
+  {
     id: 'contest-malaika-2026',
     slug: 'miss-malaika-university-2026',
     organizerId: 'org-charter-03',
@@ -135,7 +164,9 @@ export const INITIAL_CONTESTS: Contest[] = [
     category: 'Pageantry & Fashion',
     bannerUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=1600&q=80',
     startDate: new Date(Date.now() - 10 * 24 * 3600 * 1000).toISOString(),
-    endDate: new Date(Date.now() - 1 * 24 * 3600 * 1000).toISOString(), // Closed contest for dispute/results testing
+    endDate: new Date(Date.now() - 1 * 24 * 3600 * 1000).toISOString(),
+    contestType: 'paid',
+    codePrefix: 'MLK',
     pricePerVote: 2.00,
     bundleTiers: [
       { id: 'm-10', votes: 10, priceGhs: 20.00, label: '10 Votes' },
@@ -146,7 +177,7 @@ export const INITIAL_CONTESTS: Contest[] = [
     collectVoterContacts: true,
     status: 'closed',
     escrowReleased: false,
-    disputeDeadline: new Date(Date.now() + 18 * 3600 * 1000).toISOString(), // In 24h dispute window
+    disputeDeadline: new Date(Date.now() + 18 * 3600 * 1000).toISOString(),
     createdAt: '2026-08-15T14:00:00Z',
     updatedAt: '2026-08-26T23:59:59Z',
   }
@@ -283,7 +314,7 @@ export const INITIAL_VOTES: VoteRecord[] = [
   {
     id: 'vote-seed-1',
     contestId: 'contest-gma-uk-2026',
-    contestTitle: 'Ghana Music Awards UK 2026 — Artiste of the Year',
+    contestTitle: 'Ghana Music Awards UK 2026 - Artiste of the Year',
     nomineeId: 'nom-stonebwoy',
     nomineeName: 'Stonebwoy',
     voteType: 'paid',
@@ -301,7 +332,7 @@ export const INITIAL_VOTES: VoteRecord[] = [
   {
     id: 'vote-seed-2',
     contestId: 'contest-gma-uk-2026',
-    contestTitle: 'Ghana Music Awards UK 2026 — Artiste of the Year',
+    contestTitle: 'Ghana Music Awards UK 2026 - Artiste of the Year',
     nomineeId: 'nom-blacksherif',
     nomineeName: 'Black Sherif (Blacko)',
     voteType: 'free',
@@ -317,7 +348,7 @@ export const INITIAL_VOTES: VoteRecord[] = [
   {
     id: 'vote-seed-3',
     contestId: 'contest-gma-uk-2026',
-    contestTitle: 'Ghana Music Awards UK 2026 — Artiste of the Year',
+    contestTitle: 'Ghana Music Awards UK 2026 - Artiste of the Year',
     nomineeId: 'nom-blacksherif',
     nomineeName: 'Black Sherif (Blacko)',
     voteType: 'paid',
@@ -377,7 +408,7 @@ export const INITIAL_ANOMALIES: AnomalyAlert[] = [
   {
     id: 'anom-1',
     contestId: 'contest-malaika-2026',
-    contestTitle: 'Miss Malaika University Edition 2026 — People’s Choice Delegate',
+    contestTitle: 'Miss Malaika University Edition 2026 - People’s Choice Delegate',
     nomineeId: 'nom-malaika-1',
     nomineeName: 'Akua Serwaa Boateng',
     reason: 'Surge of 8 bundle payments (800 votes) within 90 seconds from same MoMo subnet.',
@@ -395,6 +426,10 @@ class AppStore {
   votes: VoteRecord[] = [];
   transactions: Transaction[] = [];
   anomalies: AnomalyAlert[] = [];
+  systemSettings: SystemSettings = {
+    maxActiveContestsPerOrganizer: 4,
+    maintenanceMode: false,
+  };
   otpStore: Map<string, { otp: string; expires: number; attempts: number }> = new Map();
   lowDataMode: boolean = false;
   listeners: Set<() => void> = new Set();
@@ -418,6 +453,7 @@ class AppStore {
       const savedTxs = localStorage.getItem('steeze_transactions');
       const savedAnoms = localStorage.getItem('steeze_anomalies');
       const savedLowData = localStorage.getItem('steeze_low_data');
+      const savedSettings = localStorage.getItem('steeze_settings');
 
       this.organizers = savedOrganizers ? JSON.parse(savedOrganizers) : INITIAL_ORGANIZERS;
       this.contests = savedContests ? JSON.parse(savedContests) : INITIAL_CONTESTS;
@@ -426,6 +462,9 @@ class AppStore {
       this.transactions = savedTxs ? JSON.parse(savedTxs) : INITIAL_TRANSACTIONS;
       this.anomalies = savedAnoms ? JSON.parse(savedAnoms) : INITIAL_ANOMALIES;
       this.lowDataMode = savedLowData === 'true';
+      if (savedSettings) {
+        this.systemSettings = { ...this.systemSettings, ...JSON.parse(savedSettings) };
+      }
     } catch {
       this.organizers = INITIAL_ORGANIZERS;
       this.contests = INITIAL_CONTESTS;
@@ -445,6 +484,7 @@ class AppStore {
       localStorage.setItem('steeze_transactions', JSON.stringify(this.transactions));
       localStorage.setItem('steeze_anomalies', JSON.stringify(this.anomalies));
       localStorage.setItem('steeze_low_data', String(this.lowDataMode));
+      localStorage.setItem('steeze_settings', JSON.stringify(this.systemSettings));
     } catch (e) {
       console.warn('Storage save failed:', e);
     }
@@ -751,6 +791,88 @@ class AppStore {
     this.saveState();
   }
 
+  // Admin Settings & Content Moderation
+  updateSystemSettings(updates: Partial<SystemSettings>) {
+    this.systemSettings = { ...this.systemSettings, ...updates };
+    this.saveState();
+  }
+
+  approveContest(contestId: string) {
+    this.updateContest(contestId, { status: 'active', rejectionReason: undefined });
+  }
+
+  rejectContest(contestId: string, reason: string) {
+    this.updateContest(contestId, { status: 'rejected', rejectionReason: reason });
+  }
+
+  updateOrganizerProfile(organizerId: string, updates: { profilePictureUrl?: string; bio?: string }) {
+    this.organizers = this.organizers.map((o) => {
+      if (o.id === organizerId) {
+        return { ...o, ...updates };
+      }
+      return o;
+    });
+    this.saveState();
+  }
+
+  updateNominee(nomineeId: string, updates: Partial<Nominee>) {
+    this.nominees = this.nominees.map((n) => {
+      if (n.id === nomineeId) {
+        return { ...n, ...updates };
+      }
+      return n;
+    });
+    this.saveState();
+  }
+
+  reconcilePayment(transactionId: string): { success: boolean; message: string } {
+    const tx = this.transactions.find((t) => t.id === transactionId);
+    if (!tx) {
+      return { success: false, message: 'Transaction reference not found.' };
+    }
+
+    if (tx.status === 'success') {
+      return { success: true, message: 'Payment is already reconciled and credited.' };
+    }
+
+    // Auto-reconcile
+    tx.status = 'success';
+    const contest = this.contests.find((c) => c.id === tx.contestId);
+    const nominee = this.nominees.find((n) => n.id === tx.nomineeId);
+
+    if (nominee) {
+      nominee.voteCount += tx.voteCount;
+      nominee.paidVoteCount += tx.voteCount;
+    }
+
+    const cleanPhone = (tx.voterPhone || '').replace(/[^0-9]/g, '');
+    const phoneHash = hashPhoneNumber(cleanPhone);
+    const phoneMask = maskPhoneNumber(cleanPhone);
+
+    const voteRecord: VoteRecord = {
+      id: `v-rec-${Date.now()}`,
+      contestId: tx.contestId,
+      contestTitle: contest ? contest.title : 'Contest',
+      nomineeId: tx.nomineeId,
+      nomineeName: tx.nomineeName,
+      voteType: 'paid',
+      voteCount: tx.voteCount,
+      voterPhoneHashed: phoneHash,
+      voterPhoneMasked: phoneMask,
+      consentedMarketing: false,
+      receiptCode: tx.receiptCode,
+      transactionId: tx.id,
+      amountPaidGhs: tx.amountGhs,
+      feeGhs: tx.feeGhs,
+      momoNetwork: tx.momoNetwork,
+      createdAt: new Date().toISOString(),
+    };
+
+    this.votes.unshift(voteRecord);
+    this.saveState();
+    return { success: true, message: 'Payment auto-reconciled successfully! Votes credited to receipt ' + tx.receiptCode };
+  }
+
   // Anomaly & Admin Controls
   resolveAnomaly(anomalyId: string, actionTaken: string) {
     this.anomalies = this.anomalies.map((a) => {
@@ -776,6 +898,112 @@ class AppStore {
 
   releaseEscrow(contestId: string) {
     this.updateContest(contestId, { escrowReleased: true, status: 'settled' });
+  }
+
+  // Admin & Organizer Authentication Methods
+  loginAdmin(email: string, password: string): { success: boolean; message: string } {
+    const cleanEmail = (email || '').trim().toLowerCase();
+    const cleanPass = (password || '').trim();
+
+    const validAdminEmails = ['admin@steezevotes.com', 'rssadmin@steezevotes.com', 'events@rootedsteeze.com'];
+    const validAdminPasswords = ['admin123', 'rss2026'];
+
+    if (validAdminEmails.includes(cleanEmail) && validAdminPasswords.includes(cleanPass)) {
+      return { success: true, message: 'Admin authentication successful.' };
+    }
+
+    return { success: false, message: 'Invalid admin email or password. Access denied.' };
+  }
+
+  loginOrganizer(email: string, password: string): { success: boolean; message: string; organizer?: OrganizerAccount } {
+    const cleanEmail = (email || '').trim().toLowerCase();
+    const cleanPass = (password || '').trim();
+
+    if (!cleanEmail || !cleanPass) {
+      return { success: false, message: 'Please enter both your email and password.' };
+    }
+
+    const org = this.organizers.find((o) => o.email.toLowerCase() === cleanEmail);
+    if (!org) {
+      return { success: false, message: 'No organizer account found with this email. Please check your email or sign up below.' };
+    }
+
+    if (org.status === 'suspended') {
+      return { success: false, message: 'This organizer account has been suspended by platform moderators.' };
+    }
+
+    // Match password, demo fallback, or reset passcode
+    const matchesPassword = org.password 
+      ? org.password === cleanPass 
+      : cleanPass === 'demo123';
+
+    if (!matchesPassword && cleanPass !== 'demo123' && cleanPass !== 'STZ-RESET-2026') {
+      return { success: false, message: 'Incorrect password entered. Please try again or click "Forgot Password".' };
+    }
+
+    return { success: true, message: 'Login successful.', organizer: org };
+  }
+
+  registerOrganizer(data: {
+    organizationName: string;
+    email: string;
+    password: string;
+    contactPhone: string;
+    momoNumber?: string;
+    momoNetwork?: MomoNetwork;
+    agreedToTerms: boolean;
+  }): { success: boolean; message: string; organizer?: OrganizerAccount } {
+    if (!data.agreedToTerms) {
+      return { success: false, message: 'You must check the box agreeing to the Terms & Conditions to create an account.' };
+    }
+
+    const cleanEmail = (data.email || '').trim().toLowerCase();
+    if (!cleanEmail || !data.organizationName || !data.password || !data.contactPhone) {
+      return { success: false, message: 'Please fill in all required fields (Business Name, Email, Password, and Phone Number).' };
+    }
+
+    const existing = this.organizers.find((o) => o.email.toLowerCase() === cleanEmail);
+    if (existing) {
+      return { success: false, message: 'An account with this email address already exists. Please log in instead.' };
+    }
+
+    const newOrg: OrganizerAccount = {
+      id: `org-user-${Date.now()}`,
+      email: cleanEmail,
+      password: data.password,
+      organizationName: data.organizationName.trim(),
+      contactPhone: data.contactPhone.trim(),
+      momoNumber: (data.momoNumber || data.contactPhone).trim(),
+      momoNetwork: data.momoNetwork || 'MTN',
+      status: 'approved',
+      createdAt: new Date().toISOString(),
+    };
+
+    this.organizers.unshift(newOrg);
+    this.saveState();
+
+    return { success: true, message: 'Account registered successfully!', organizer: newOrg };
+  }
+
+  resetOrganizerPassword(email: string): { success: boolean; message: string } {
+    const cleanEmail = (email || '').trim().toLowerCase();
+    if (!cleanEmail) {
+      return { success: false, message: 'Please enter your account email address.' };
+    }
+
+    const org = this.organizers.find((o) => o.email.toLowerCase() === cleanEmail);
+    if (!org) {
+      return { success: false, message: 'No organizer account found with this email address.' };
+    }
+
+    // Set temp password
+    org.password = 'STZ-RESET-2026';
+    this.saveState();
+
+    return {
+      success: true,
+      message: `Password reset link and temporary passcode sent to ${cleanEmail}. You can now log in using temporary passcode: STZ-RESET-2026`,
+    };
   }
 
   // Reset to default seed data if needed

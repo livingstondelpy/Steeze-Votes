@@ -24,11 +24,15 @@ import {
   TrendingUp,
   FileText,
   Percent,
-  ArrowLeft
+  ArrowLeft,
+  Upload,
+  UserCheck
 } from 'lucide-react';
-import { Contest, Nominee, OrganizerAccount, BundleTier, Transaction, VoteRecord } from '../../types';
+import { Contest, Nominee, OrganizerAccount, BundleTier, Transaction, VoteRecord, ContestType } from '../../types';
 import { store } from '../../lib/store';
 import { generateResultsCertificatePdf } from '../../lib/pdfCertificate';
+import { processAndCompressImage } from '../../lib/imageUtils';
+import { OrganizerTermsModal } from '../legal/OrganizerTermsModal';
 
 interface OrganizerPortalProps {
   contests: Contest[];
@@ -38,6 +42,8 @@ interface OrganizerPortalProps {
   votes: VoteRecord[];
   onSelectContestForPreview: (contestId: string) => void;
   onBackToHome?: () => void;
+  currentOrganizer?: OrganizerAccount | null;
+  onLogout?: () => void;
 }
 
 export const OrganizerPortal: React.FC<OrganizerPortalProps> = ({
@@ -48,16 +54,36 @@ export const OrganizerPortal: React.FC<OrganizerPortalProps> = ({
   votes,
   onSelectContestForPreview,
   onBackToHome,
+  currentOrganizer,
+  onLogout,
 }) => {
   // Current active organizer
-  const [selectedOrgId, setSelectedOrgId] = useState<string>(organizers[0]?.id || 'org-rss-01');
-  const currentOrg = organizers.find((o) => o.id === selectedOrgId) || organizers[0];
+  const [selectedOrgId, setSelectedOrgId] = useState<string>(currentOrganizer?.id || organizers[0]?.id || 'org-rss-01');
+  const currentOrg = currentOrganizer || organizers.find((o) => o.id === selectedOrgId) || organizers[0];
 
   // Active Tab
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'create' | 'analytics' | 'milestones' | 'contacts'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'create' | 'analytics' | 'profile' | 'milestones'>('dashboard');
 
-  // Selected contest for drill-down / editing
+  // Terms Modal State
+  const [showTermsModal, setShowTermsModal] = useState(false);
+  const [agreedTerms, setAgreedTerms] = useState(false);
+
+  // Profile Edit State
+  const [profilePic, setProfilePic] = useState(currentOrg.profilePictureUrl || '');
+  const [profileBio, setProfileBio] = useState(currentOrg.bio || '');
+
+  // Nominee editing modal/state inside active contest
+  const [editingNominee, setEditingNominee] = useState<Nominee | null>(null);
+  const [editNomineeName, setEditNomineeName] = useState('');
+  const [editNomineeStage, setEditNomineeStage] = useState('');
+  const [editNomineeBio, setEditNomineeBio] = useState('');
+  const [editNomineePhoto, setEditNomineePhoto] = useState('');
+
+  // Active Contests count for max cap check
   const orgContests = contests.filter((c) => c.organizerId === currentOrg.id);
+  const activeContestsCount = orgContests.filter((c) => c.status === 'active' || c.status === 'pending_review').length;
+  const maxContestsCap = store.systemSettings.maxActiveContestsPerOrganizer;
+
   const [activeContestId, setActiveContestId] = useState<string>(orgContests[0]?.id || contests[0]?.id || '');
   const activeContest = contests.find((c) => c.id === activeContestId) || orgContests[0] || contests[0];
 
@@ -65,7 +91,9 @@ export const OrganizerPortal: React.FC<OrganizerPortalProps> = ({
   const [newTitle, setNewTitle] = useState('');
   const [newDescription, setNewDescription] = useState('');
   const [newCategory, setNewCategory] = useState('Music & Entertainment');
-  const [newBannerUrl, setNewBannerUrl] = useState('https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=1600&q=80');
+  const [newContestType, setNewContestType] = useState<ContestType>('paid');
+  const [newCodePrefix, setNewCodePrefix] = useState('STZ');
+  const [newBannerUrl, setNewBannerUrl] = useState('https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=1600&q=80');
   const [newPricePerVote, setNewPricePerVote] = useState<number>(1.00);
   const [newStartDate, setNewStartDate] = useState(new Date().toISOString().slice(0, 16));
   const [newEndDate, setNewEndDate] = useState(new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString().slice(0, 16));
@@ -88,15 +116,15 @@ export const OrganizerPortal: React.FC<OrganizerPortalProps> = ({
       name: 'Kofi Manu',
       stageName: 'Kofi Jay',
       photoUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=600&q=80',
-      bio: 'Rising Afrobeats talent taking the Ghanaian airwaves by storm.',
-      nomineeCode: 'NOM-01',
+      bio: 'Rising Afrobeats talent taking Ghanaian airwaves by storm.',
+      nomineeCode: 'STZ-01',
     },
     {
       name: 'Yaa Asantewaa',
       stageName: 'Queen Yaa',
       photoUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80',
       bio: 'Vocal powerhouse bringing soulful highlife melodies.',
-      nomineeCode: 'NOM-02',
+      nomineeCode: 'STZ-02',
     }
   ]);
 
@@ -132,40 +160,90 @@ export const OrganizerPortal: React.FC<OrganizerPortalProps> = ({
     e.preventDefault();
     if (!newTitle.trim()) return;
 
+    // Check max active contests cap
+    if (activeContestsCount >= maxContestsCap) {
+      alert(`Limit Reached: Your organization currently has ${activeContestsCount} active/pending contest(s). The platform cap is set to ${maxContestsCap} maximum. Please wait for an existing contest to finish or contact RSS Admin.`);
+      return;
+    }
+
+    if (!agreedTerms) {
+      alert('Please read and agree to the Organizer Terms & Conditions before publishing a contest.');
+      return;
+    }
+
     const slug = newTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
     const created = store.createContest({
       slug,
-      status: 'active',
+      status: 'pending_review',
       organizerId: currentOrg.id,
       organizerName: currentOrg.organizationName,
       title: newTitle,
       description: newDescription,
       category: newCategory,
+      contestType: newContestType,
+      codePrefix: newCodePrefix.toUpperCase(),
       bannerUrl: newBannerUrl,
       sponsorName: newSponsorName || undefined,
       sponsorLogoUrl: newSponsorLogo || undefined,
       startDate: new Date(newStartDate).toISOString(),
       endDate: new Date(newEndDate).toISOString(),
-      pricePerVote: newPricePerVote,
-      bundleTiers: newBundleTiers,
+      pricePerVote: newContestType === 'free' ? 0 : newPricePerVote,
+      bundleTiers: newContestType === 'free' ? [] : newBundleTiers,
       showPublicResults: newShowPublic,
       collectVoterContacts: newCollectContacts,
     });
 
-    // Add initial nominees
-    formNominees.forEach((fn) => {
+    // Add initial nominees with codePrefix
+    formNominees.forEach((fn, idx) => {
+      const code = `${newCodePrefix.toUpperCase()}-${String(idx + 1).padStart(2, '0')}`;
       store.addNominee(created.id, {
         name: fn.name,
         stageName: fn.stageName,
         photoUrl: fn.photoUrl,
         bio: fn.bio,
-        nomineeCode: fn.nomineeCode,
+        nomineeCode: code,
       });
     });
 
     setActiveContestId(created.id);
     setActiveTab('dashboard');
-    alert(`Contest "${created.title}" published successfully!`);
+    alert(`Contest "${created.title}" submitted successfully! It is now in "Pending Review" status and will be live once approved by RSS Admin.`);
+  };
+
+  const handleSaveProfile = (e: React.FormEvent) => {
+    e.preventDefault();
+    store.updateOrganizerProfile(currentOrg.id, {
+      profilePictureUrl: profilePic,
+      bio: profileBio,
+    });
+    alert('Organizer profile updated successfully!');
+  };
+
+  const handleImageUpload = async (
+    file: File,
+    onSuccess: (dataUrl: string) => void
+  ) => {
+    const res = await processAndCompressImage(file, { maxFileSizeMB: 5 });
+    if (!res.success || !res.dataUrl) {
+      alert(res.error || 'Failed to process image.');
+      return;
+    }
+    onSuccess(res.dataUrl);
+  };
+
+  const handleSaveNomineeEdit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingNominee) return;
+
+    store.updateNominee(editingNominee.id, {
+      name: editNomineeName,
+      stageName: editNomineeStage,
+      bio: editNomineeBio,
+      photoUrl: editNomineePhoto,
+    });
+
+    setEditingNominee(null);
+    alert('Contestant information updated successfully!');
   };
 
   const handleAddNomineeToActive = (e: React.FormEvent) => {
@@ -237,7 +315,7 @@ export const OrganizerPortal: React.FC<OrganizerPortalProps> = ({
                 Organizer Studio
               </span>
               <span className="text-[10px] font-bold bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full">
-                90% MoMo Payouts
+                Mobile Money Payouts
               </span>
             </div>
             <p className="text-xs text-gray-500">
@@ -271,6 +349,15 @@ export const OrganizerPortal: React.FC<OrganizerPortalProps> = ({
               >
                 <Eye className="w-3.5 h-3.5" />
                 Preview Public Page
+              </button>
+            )}
+
+            {onLogout && (
+              <button
+                onClick={onLogout}
+                className="px-3.5 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-xl text-xs transition-colors shadow-xs"
+              >
+                Log Out
               </button>
             )}
           </div>
@@ -327,15 +414,15 @@ export const OrganizerPortal: React.FC<OrganizerPortalProps> = ({
           </button>
 
           <button
-            onClick={() => setActiveTab('contacts')}
+            onClick={() => setActiveTab('profile')}
             className={`px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-colors flex items-center gap-1.5 ${
-              activeTab === 'contacts'
+              activeTab === 'profile'
                 ? 'bg-amber-500 text-white shadow-xs'
                 : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
             }`}
           >
-            <Users className="w-4 h-4" />
-            Voter Contacts CSV ({consentedContacts.length})
+            <UserCheck className="w-4 h-4" />
+            Organizer Profile &amp; KYC
           </button>
         </div>
 
@@ -428,9 +515,25 @@ export const OrganizerPortal: React.FC<OrganizerPortalProps> = ({
                           </div>
                         </div>
 
-                        <div className="text-right whitespace-nowrap">
-                          <span className="text-sm font-bold text-gray-900 block">{nom.voteCount.toLocaleString()} votes</span>
-                          <span className="text-xs text-amber-700 font-semibold">{pct}% of total</span>
+                        <div className="flex items-center gap-3">
+                          <div className="text-right whitespace-nowrap">
+                            <span className="text-sm font-bold text-gray-900 block">{nom.voteCount.toLocaleString()} votes</span>
+                            <span className="text-xs text-amber-700 font-semibold">{pct}% of total</span>
+                          </div>
+                          
+                          <button
+                            onClick={() => {
+                              setEditingNominee(nom);
+                              setEditNomineeName(nom.name);
+                              setEditNomineeStage(nom.stageName || nom.name);
+                              setEditNomineeBio(nom.bio || '');
+                              setEditNomineePhoto(nom.photoUrl);
+                            }}
+                            className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
+                            title="Edit Nominee Photo/Bio"
+                          >
+                            <Edit3 className="w-4 h-4" />
+                          </button>
                         </div>
                       </div>
                     );
@@ -525,6 +628,40 @@ export const OrganizerPortal: React.FC<OrganizerPortalProps> = ({
                 />
               </div>
 
+              {/* Contest Type & Code Prefix */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Contest Type (Locked at Creation)</label>
+                  <select
+                    value={newContestType}
+                    onChange={(e) => setNewContestType(e.target.value as ContestType)}
+                    className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-bold text-gray-900 focus:ring-2 focus:ring-amber-500"
+                  >
+                    <option value="paid">Paid Voting (Mobile Money &amp; Card)</option>
+                    <option value="free">100% Free Voting (SMS OTP Verification)</option>
+                  </select>
+                  <p className="text-[11px] text-gray-500 mt-1">
+                    {newContestType === 'free' 
+                      ? 'Free contests limit each verified voter phone number to 1 free vote via SMS OTP.'
+                      : 'Paid contests enable customizable vote bundles (e.g., 10 votes for GHS 9.00).'}
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Contestant Code Prefix</label>
+                  <input
+                    type="text"
+                    required
+                    maxLength={6}
+                    value={newCodePrefix}
+                    onChange={(e) => setNewCodePrefix(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
+                    placeholder="e.g. STZ or GMA"
+                    className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-mono font-bold text-amber-700 uppercase focus:ring-2 focus:ring-amber-500"
+                  />
+                  <p className="text-[11px] text-gray-500 mt-1">Auto-generates codes like {newCodePrefix || 'PREFIX'}-01, {newCodePrefix || 'PREFIX'}-02.</p>
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-gray-700 mb-1">Category</label>
@@ -540,17 +677,19 @@ export const OrganizerPortal: React.FC<OrganizerPortalProps> = ({
                   </select>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">Price per Single Vote (GHS)</label>
-                  <input
-                    type="number"
-                    min={1.00}
-                    step={0.50}
-                    value={newPricePerVote}
-                    onChange={(e) => setNewPricePerVote(parseFloat(e.target.value) || 1.00)}
-                    className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 font-mono"
-                  />
-                </div>
+                {newContestType === 'paid' && (
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">Base Price per Vote (GHS)</label>
+                    <input
+                      type="number"
+                      min={0.50}
+                      step={0.50}
+                      value={newPricePerVote}
+                      onChange={(e) => setNewPricePerVote(parseFloat(e.target.value) || 1.00)}
+                      className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 font-mono"
+                    />
+                  </div>
+                )}
               </div>
 
               <div>
@@ -586,17 +725,33 @@ export const OrganizerPortal: React.FC<OrganizerPortalProps> = ({
                 </div>
               </div>
 
+              {/* Cover Flyer Image upload */}
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">Banner Image URL</label>
-                <input
-                  type="url"
-                  value={newBannerUrl}
-                  onChange={(e) => setNewBannerUrl(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 font-mono text-xs"
-                />
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Event Cover / Flyer Image</label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="url"
+                    value={newBannerUrl}
+                    onChange={(e) => setNewBannerUrl(e.target.value)}
+                    placeholder="Image URL or upload below..."
+                    className="flex-1 px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-mono focus:ring-2 focus:ring-amber-500"
+                  />
+                  <label className="px-3.5 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold text-xs rounded-xl cursor-pointer flex items-center gap-1.5 shrink-0 transition-colors">
+                    <Upload className="w-3.5 h-3.5" /> Upload Flyer
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) handleImageUpload(file, (dataUrl) => setNewBannerUrl(dataUrl));
+                      }}
+                    />
+                  </label>
+                </div>
               </div>
 
-              <div className="p-4 rounded-2xl bg-gray-50 border border-gray-200 space-y-2">
+              <div className="p-4 rounded-2xl bg-gray-50 border border-gray-200 space-y-3">
                 <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-gray-800">
                   <input
                     type="checkbox"
@@ -616,13 +771,34 @@ export const OrganizerPortal: React.FC<OrganizerPortalProps> = ({
                   />
                   <span>Collect consented voter phone numbers for post-event marketing</span>
                 </label>
+
+                <div className="pt-2 border-t border-gray-200 flex items-center justify-between">
+                  <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-amber-900">
+                    <input
+                      type="checkbox"
+                      required
+                      checked={agreedTerms}
+                      onChange={(e) => setAgreedTerms(e.target.checked)}
+                      className="rounded text-amber-600 focus:ring-amber-500"
+                    />
+                    <span>I agree to the RSS Organizer Terms &amp; Conditions</span>
+                  </label>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowTermsModal(true)}
+                    className="text-xs text-amber-600 font-semibold hover:underline"
+                  >
+                    Read Terms
+                  </button>
+                </div>
               </div>
 
               <button
                 type="submit"
-                className="w-full py-3.5 bg-amber-500 hover:bg-amber-600 text-white font-semibold rounded-xl text-sm transition-colors shadow-xs"
+                className="w-full py-3.5 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl text-sm transition-colors shadow-xs"
               >
-                Publish Contest Live
+                Submit Contest for RSS Admin Review
               </button>
             </form>
           </div>
@@ -633,14 +809,14 @@ export const OrganizerPortal: React.FC<OrganizerPortalProps> = ({
           <div className="bg-white rounded-3xl border border-gray-200 p-6 sm:p-8 shadow-xs max-w-3xl mx-auto space-y-6">
             <div>
               <h2 className="text-xl font-bold text-gray-900">Official Results & Certified PDF</h2>
-              <p className="text-xs text-gray-500 mt-0.5">Generate audited summary reports with cryptographic verification seals.</p>
+              <p className="text-xs text-gray-500 mt-0.5">Generate official summary reports with verified results.</p>
             </div>
 
             <div className="p-5 rounded-2xl bg-gray-50 border border-gray-200 space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-gray-700">Audit Status:</span>
                 <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800">
-                  Ledger Hash Verified
+                  Results Verified
                 </span>
               </div>
               <p className="text-xs text-gray-600 leading-relaxed">
@@ -715,61 +891,179 @@ export const OrganizerPortal: React.FC<OrganizerPortalProps> = ({
           </div>
         )}
 
-        {/* TAB 5: VOTER CONTACTS CSV */}
-        {activeTab === 'contacts' && activeContest && (
-          <div className="bg-white rounded-3xl border border-gray-200 p-6 sm:p-8 shadow-xs max-w-4xl mx-auto space-y-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div>
-                <h2 className="text-xl font-bold text-gray-900">Consented Voter Contacts</h2>
-                <p className="text-xs text-gray-500 mt-0.5">
-                  Voters who explicitly opted in during voting to receive updates from {currentOrg.organizationName}.
-                </p>
-              </div>
-
-              <button
-                onClick={handleExportContactsCsv}
-                className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl text-xs transition-colors shadow-xs flex items-center gap-1.5 self-start sm:self-auto"
-              >
-                <Download className="w-3.5 h-3.5" /> Export CSV ({consentedContacts.length})
-              </button>
+        {/* TAB 5: ORGANIZER PROFILE & KYC */}
+        {activeTab === 'profile' && (
+          <div className="bg-white rounded-3xl border border-gray-200 p-6 sm:p-8 shadow-xs max-w-3xl mx-auto space-y-6">
+            <div>
+              <h2 className="text-xl font-bold text-gray-900">Organizer Account Profile</h2>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Voters can view your organization logo, bio, and verified Mobile Money payout credentials on public contest pages.
+              </p>
             </div>
 
-            {consentedContacts.length === 0 ? (
-              <div className="text-center py-12 bg-gray-50 rounded-2xl border border-gray-200 p-6 space-y-2">
-                <Users className="w-8 h-8 text-gray-400 mx-auto" />
-                <p className="text-xs font-bold text-gray-700">No opted-in voter contacts yet</p>
-                <p className="text-xs text-gray-500">As voters opt in during their free or paid votes, their numbers will appear here.</p>
+            <form onSubmit={handleSaveProfile} className="space-y-5">
+              <div className="flex flex-col sm:flex-row items-center gap-6 p-4 rounded-2xl bg-gray-50 border border-gray-200">
+                <div className="w-20 h-20 rounded-2xl bg-amber-100 border border-amber-300 overflow-hidden shrink-0 flex items-center justify-center relative">
+                  {profilePic ? (
+                    <img src={profilePic} alt={currentOrg.organizationName} className="w-full h-full object-cover" />
+                  ) : (
+                    <Trophy className="w-8 h-8 text-amber-700" />
+                  )}
+                </div>
+
+                <div className="space-y-2 text-center sm:text-left">
+                  <h4 className="text-sm font-bold text-gray-900">{currentOrg.organizationName}</h4>
+                  <p className="text-xs text-gray-500 font-mono">KYC Status: <span className="text-emerald-700 font-bold">Verified</span></p>
+                  
+                  <label className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white font-semibold text-xs rounded-xl cursor-pointer shadow-xs transition-colors">
+                    <Upload className="w-3.5 h-3.5" /> Upload Brand Logo / Photo
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) handleImageUpload(file, (dataUrl) => setProfilePic(dataUrl));
+                      }}
+                    />
+                  </label>
+                </div>
               </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-gray-50 border-b border-gray-200 text-gray-600 font-semibold">
-                    <tr>
-                      <th className="p-3">Receipt Code</th>
-                      <th className="p-3">Phone Number</th>
-                      <th className="p-3">Nominee</th>
-                      <th className="p-3">Votes</th>
-                      <th className="p-3">Date</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {consentedContacts.map((c) => (
-                      <tr key={c.id} className="hover:bg-gray-50">
-                        <td className="p-3 font-mono font-bold text-amber-700">{c.receiptCode}</td>
-                        <td className="p-3 font-mono font-medium text-gray-900">{c.voterPhoneRaw || c.voterPhoneMasked}</td>
-                        <td className="p-3 font-medium text-gray-800">{c.nomineeName}</td>
-                        <td className="p-3 font-semibold">{c.voteCount}</td>
-                        <td className="p-3 text-gray-500">{new Date(c.createdAt).toLocaleDateString('en-GB')}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Organization Bio &amp; About</label>
+                <textarea
+                  rows={4}
+                  value={profileBio}
+                  onChange={(e) => setProfileBio(e.target.value)}
+                  placeholder="Tell voters about your organization, past awards, and mission..."
+                  className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-amber-500"
+                />
               </div>
-            )}
+
+              <div className="p-4 rounded-2xl bg-amber-50/60 border border-amber-200 space-y-1 text-xs">
+                <h5 className="font-bold text-amber-950">Verified Mobile Money Payout Wallet</h5>
+                <p className="text-amber-900 font-mono">
+                  Network: <strong>{currentOrg.momoNetwork}</strong> • MoMo Number: <strong>{currentOrg.momoNumber}</strong>
+                </p>
+                <p className="text-[11px] text-amber-800">Payouts are settled automatically to this wallet 24 hours after contest end date.</p>
+              </div>
+
+              <div className="flex items-center justify-between pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowTermsModal(true)}
+                  className="text-xs text-amber-600 font-semibold hover:underline"
+                >
+                  View RSS Organizer Terms &amp; Conditions
+                </button>
+
+                <button
+                  type="submit"
+                  className="px-6 py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs rounded-xl shadow-xs transition-colors"
+                >
+                  Save Profile Updates
+                </button>
+              </div>
+            </form>
           </div>
         )}
 
       </div>
+
+      {/* EDIT NOMINEE MODAL OVERLAY */}
+      {editingNominee && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <h3 className="text-base font-bold text-gray-900">Edit Contestant Information</h3>
+              <button
+                onClick={() => setEditingNominee(null)}
+                className="text-gray-400 hover:text-gray-600 text-xs font-bold"
+              >
+                Cancel
+              </button>
+            </div>
+
+            <p className="text-xs text-amber-800 bg-amber-50 p-2.5 rounded-xl border border-amber-200">
+              Note: Vote counts ({editingNominee.voteCount}) are tamper-proof and cannot be modified.
+            </p>
+
+            <form onSubmit={handleSaveNomineeEdit} className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Full Name</label>
+                <input
+                  type="text"
+                  required
+                  value={editNomineeName}
+                  onChange={(e) => setEditNomineeName(e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Stage / Display Name</label>
+                <input
+                  type="text"
+                  value={editNomineeStage}
+                  onChange={(e) => setEditNomineeStage(e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Bio</label>
+                <textarea
+                  rows={2}
+                  value={editNomineeBio}
+                  onChange={(e) => setEditNomineeBio(e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Photo Upload</label>
+                <div className="flex items-center gap-3">
+                  <img src={editNomineePhoto} alt="Preview" className="w-10 h-10 rounded-xl object-cover border border-gray-200 shrink-0" />
+                  <label className="flex-1 py-2 px-3 bg-gray-100 hover:bg-gray-200 rounded-xl text-xs font-semibold text-gray-800 text-center cursor-pointer">
+                    Upload New Compressed Photo
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) handleImageUpload(file, (dataUrl) => setEditNomineePhoto(dataUrl));
+                      }}
+                    />
+                  </label>
+                </div>
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingNominee(null)}
+                  className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold rounded-xl"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-xl shadow-xs"
+                >
+                  Save Changes
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ORGANIZER TERMS MODAL */}
+      {showTermsModal && (
+        <OrganizerTermsModal onClose={() => setShowTermsModal(false)} />
+      )}
     </div>
   );
 };

@@ -31,12 +31,14 @@ export const ContestsPage: React.FC<ContestsPageProps> = ({
   const categories = ['All', 'Music & Entertainment', 'Nightlife & Culture', 'Pageantry & Fashion'];
 
   const filteredContests = contests.filter((c) => {
+    // Only active or closed contests are visible to public voters
+    const isPublic = c.status === 'active' || c.status === 'closed';
     const matchesCat = selectedCategory === 'All' || c.category === selectedCategory;
     const matchesStatus = selectedStatus === 'all' || c.status === selectedStatus;
     const matchesSearch = c.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
                           c.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
                           c.organizerName.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesCat && matchesStatus && matchesSearch;
+    return isPublic && matchesCat && matchesStatus && matchesSearch;
   });
 
   const getNomineeCount = (contestId: string) => {

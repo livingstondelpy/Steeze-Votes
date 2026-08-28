@@ -94,7 +94,7 @@ export const MyVotesLookup: React.FC<MyVotesLookupProps> = ({
           </form>
 
           <p className="text-[11px] text-gray-500 mt-2.5">
-            Your phone number is checked securely against our tamper-proof vote ledger.
+            Your phone number is checked securely against our official voting records.
           </p>
         </div>
 

@@ -161,7 +161,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
                 Audit Hash Verified
               </p>
               <p className="text-[10px] text-gray-500 max-w-[190px]">
-                Scan QR or lookup code on SteezeVotes to verify this ballot in the tamper-proof ledger.
+                Scan QR or lookup code on SteezeVotes to verify this vote anytime.
               </p>
             </div>
 

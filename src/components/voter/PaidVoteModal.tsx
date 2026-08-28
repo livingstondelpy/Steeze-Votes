@@ -150,6 +150,34 @@ export const PaidVoteModal: React.FC<PaidVoteModalProps> = ({
           {step === 'select' ? (
             <form onSubmit={handleInitiatePayment} className="space-y-6">
               
+              {/* Payment Method Selector (MoMo Primary, Card Secondary) */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2">
+                  Payment Method
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="p-3 rounded-xl border-2 border-amber-500 bg-amber-50/70 text-amber-950 font-bold text-xs flex items-center justify-between">
+                    <span className="flex items-center gap-1.5">
+                      <Smartphone className="w-4 h-4 text-amber-600" />
+                      Mobile Money (MoMo)
+                    </span>
+                    <span className="text-[10px] font-bold bg-amber-500 text-white px-2 py-0.5 rounded-full">
+                      RECOMMENDED
+                    </span>
+                  </div>
+
+                  <div className="p-3 rounded-xl border border-gray-200 bg-gray-50 text-gray-500 text-xs flex items-center justify-between opacity-80 cursor-not-allowed">
+                    <span className="flex items-center gap-1.5">
+                      <Lock className="w-3.5 h-3.5 text-gray-400" />
+                      Debit/Credit Card
+                    </span>
+                    <span className="text-[10px] text-gray-400 font-medium">
+                      Secondary
+                    </span>
+                  </div>
+                </div>
+              </div>
+
               {/* Vote Package Tiers Selection */}
               <div>
                 <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2.5">
@@ -334,13 +362,24 @@ export const PaidVoteModal: React.FC<PaidVoteModalProps> = ({
                   )}
                 </button>
 
-                <button
-                  type="button"
-                  onClick={() => setStep('select')}
-                  className="text-xs text-gray-500 hover:text-gray-800"
-                >
-                  Cancel or change package
-                </button>
+                <div className="pt-2 border-t border-gray-100 flex items-center justify-between">
+                  <button
+                    type="button"
+                    onClick={() => setStep('select')}
+                    className="text-xs text-gray-500 hover:text-gray-800 font-medium"
+                  >
+                    Cancel or change package
+                  </button>
+
+                  <a
+                    href="https://wa.me/233500000000?text=Hello%20SteezeVotes%20Support%2C%20I%20have%20an%20issue%20with%20my%20payment."
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-xs text-amber-600 font-semibold hover:underline flex items-center gap-1"
+                  >
+                    Need MoMo Help? Chat WhatsApp
+                  </a>
+                </div>
               </div>
             </div>
           )}

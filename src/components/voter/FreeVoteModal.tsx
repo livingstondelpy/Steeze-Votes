@@ -2,14 +2,11 @@ import React, { useState } from 'react';
 import { 
   X, 
   Smartphone, 
-  KeyRound, 
   ShieldCheck, 
   CheckCircle2, 
   AlertCircle, 
-  Copy, 
   ArrowRight,
   RefreshCw,
-  Lock
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { Nominee, Contest, VoteRecord } from '../../types';
@@ -33,7 +30,6 @@ export const FreeVoteModal: React.FC<FreeVoteModalProps> = ({
   const [phone, setPhone] = useState('');
   const [step, setStep] = useState<'phone' | 'otp'>('phone');
   const [otpCode, setOtpCode] = useState('');
-  const [consentedMarketing, setConsentedMarketing] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [simulatedOtp, setSimulatedOtp] = useState<string | null>(null);
@@ -46,7 +42,7 @@ export const FreeVoteModal: React.FC<FreeVoteModalProps> = ({
 
     const clean = phone.replace(/[^0-9]/g, '');
     if (clean.length < 9) {
-      setError('Please enter a valid 9 or 10-digit Ghanaian mobile number.');
+      setError('Please enter a valid Ghanaian mobile phone number.');
       setLoading(false);
       return;
     }
@@ -69,7 +65,7 @@ export const FreeVoteModal: React.FC<FreeVoteModalProps> = ({
     setLoading(true);
 
     if (!otpCode || otpCode.trim().length !== 6) {
-      setError('Please enter the 6-digit OTP code sent to your phone.');
+      setError('Please enter the 6-digit code sent to your phone.');
       setLoading(false);
       return;
     }
@@ -79,7 +75,7 @@ export const FreeVoteModal: React.FC<FreeVoteModalProps> = ({
       contest.id,
       nominee.id,
       otpCode,
-      consentedMarketing
+      false
     );
 
     setLoading(false);
@@ -122,7 +118,7 @@ export const FreeVoteModal: React.FC<FreeVoteModalProps> = ({
               <CheckCircle2 className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-gray-900">Cast 1 Free Vote</h2>
+              <h2 className="text-base font-bold text-gray-900">Cast Your Free Vote</h2>
               <p className="text-xs text-gray-500">Supporting {nominee.stageName || nominee.name}</p>
             </div>
           </div>
@@ -166,7 +162,7 @@ export const FreeVoteModal: React.FC<FreeVoteModalProps> = ({
             <form onSubmit={handleRequestOtp} className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-                  Enter your Ghanaian Mobile Number
+                  Enter your phone number to get your free vote
                 </label>
                 <div className="relative">
                   <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs font-semibold text-gray-400">
@@ -183,23 +179,9 @@ export const FreeVoteModal: React.FC<FreeVoteModalProps> = ({
                   />
                 </div>
                 <p className="text-[11px] text-gray-500 mt-1.5">
-                  Works on MTN, Telecel, and AT numbers. Every phone number gets 1 free vote for this contest.
+                  Works on MTN, Telecel, and AT numbers. Every Ghana phone number gets 1 free vote per contest.
                 </p>
               </div>
-
-              {contest.collectVoterContacts && (
-                <label className="flex items-start gap-2.5 p-3 rounded-xl bg-gray-50 border border-gray-100 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={consentedMarketing}
-                    onChange={(e) => setConsentedMarketing(e.target.checked)}
-                    className="mt-0.5 rounded text-amber-500 focus:ring-amber-400"
-                  />
-                  <span className="text-xs text-gray-600 leading-snug">
-                    Send me voting updates, contest milestones, and results for {contest.organizerName}.
-                  </span>
-                </label>
-              )}
 
               <button
                 type="submit"
@@ -209,11 +191,11 @@ export const FreeVoteModal: React.FC<FreeVoteModalProps> = ({
                 {loading ? (
                   <>
                     <RefreshCw className="w-4 h-4 animate-spin" />
-                    Sending SMS OTP...
+                    Sending Verification Code...
                   </>
                 ) : (
                   <>
-                    Send 6-Digit SMS Code
+                    Get Free Vote Code
                     <ArrowRight className="w-4 h-4" />
                   </>
                 )}
@@ -232,12 +214,11 @@ export const FreeVoteModal: React.FC<FreeVoteModalProps> = ({
             </form>
           ) : (
             <form onSubmit={handleVerifyOtp} className="space-y-4">
-              {/* Simulated OTP banner for testing in sandbox */}
               {simulatedOtp && (
                 <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-center justify-between">
                   <div>
-                    <span className="font-semibold block">SMS Simulation:</span>
-                    <span>Your OTP code is <strong className="font-mono text-sm">{simulatedOtp}</strong></span>
+                    <span className="font-semibold block">SMS Test Helper:</span>
+                    <span>Your 6-digit code is <strong className="font-mono text-sm">{simulatedOtp}</strong></span>
                   </div>
                   <button
                     type="button"
@@ -274,7 +255,7 @@ export const FreeVoteModal: React.FC<FreeVoteModalProps> = ({
                 {loading ? (
                   <>
                     <RefreshCw className="w-4 h-4 animate-spin" />
-                    Confirming Vote...
+                    Confirming Free Vote...
                   </>
                 ) : (
                   <>
@@ -298,7 +279,7 @@ export const FreeVoteModal: React.FC<FreeVoteModalProps> = ({
                   onClick={handleRequestOtp}
                   className="text-amber-600 hover:text-amber-700 font-semibold"
                 >
-                  Resend SMS Code
+                  Resend Code
                 </button>
               </div>
             </form>

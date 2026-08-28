@@ -1,11 +1,14 @@
 import React, { useState } from 'react';
-import { X, Smartphone, UserCheck, ShieldCheck, ArrowRight, Lock } from 'lucide-react';
+import { X, Smartphone, UserCheck, ShieldCheck, ArrowRight, Lock, AlertCircle } from 'lucide-react';
+import { store } from '../lib/store';
+import { OrganizerAccount } from '../types';
 
 interface SignInModalProps {
   isOpen: boolean;
   onClose: () => void;
   onNavigateToMyVotes: (phone?: string) => void;
   onNavigateToOrganizer: () => void;
+  onOrganizerLogin?: (org: OrganizerAccount) => void;
 }
 
 export const SignInModal: React.FC<SignInModalProps> = ({
@@ -13,10 +16,13 @@ export const SignInModal: React.FC<SignInModalProps> = ({
   onClose,
   onNavigateToMyVotes,
   onNavigateToOrganizer,
+  onOrganizerLogin,
 }) => {
   const [tab, setTab] = useState<'voter' | 'organizer'>('voter');
   const [phone, setPhone] = useState('');
-  const [orgEmail, setOrgEmail] = useState('');
+  const [orgEmail, setOrgEmail] = useState('events@rootedsteeze.com');
+  const [orgPassword, setOrgPassword] = useState('demo123');
+  const [orgError, setOrgError] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
@@ -28,8 +34,18 @@ export const SignInModal: React.FC<SignInModalProps> = ({
 
   const handleOrgSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onClose();
-    onNavigateToOrganizer();
+    setOrgError(null);
+
+    const res = store.loginOrganizer(orgEmail, orgPassword);
+    if (res.success && res.organizer) {
+      if (onOrganizerLogin) {
+        onOrganizerLogin(res.organizer);
+      }
+      onClose();
+      onNavigateToOrganizer();
+    } else {
+      setOrgError(res.message);
+    }
   };
 
   return (
@@ -116,16 +132,24 @@ export const SignInModal: React.FC<SignInModalProps> = ({
             </form>
           ) : (
             <form onSubmit={handleOrgSubmit} className="space-y-4">
+              {orgError && (
+                <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{orgError}</span>
+                </div>
+              )}
+
               <div>
                 <label className="block text-xs font-semibold text-gray-700 mb-1.5">
                   Organizer Email
                 </label>
                 <input
                   type="email"
+                  required
                   value={orgEmail}
                   onChange={(e) => setOrgEmail(e.target.value)}
                   placeholder="events@yourbrand.com"
-                  className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white transition-all"
+                  className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white transition-all font-mono"
                 />
               </div>
 
@@ -135,8 +159,10 @@ export const SignInModal: React.FC<SignInModalProps> = ({
                 </label>
                 <input
                   type="password"
+                  required
+                  value={orgPassword}
+                  onChange={(e) => setOrgPassword(e.target.value)}
                   placeholder="••••••••"
-                  defaultValue="demo123"
                   className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white transition-all font-mono"
                 />
               </div>
@@ -145,7 +171,7 @@ export const SignInModal: React.FC<SignInModalProps> = ({
                 type="submit"
                 className="w-full py-3 bg-gray-900 hover:bg-black text-white font-semibold rounded-xl text-sm transition-colors shadow-xs flex items-center justify-center gap-2"
               >
-                Open Organizer Studio
+                Log In to Organizer Studio
                 <ArrowRight className="w-4 h-4" />
               </button>
 

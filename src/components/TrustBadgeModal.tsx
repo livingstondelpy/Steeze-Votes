@@ -44,7 +44,7 @@ export const TrustBadgeModal: React.FC<TrustBadgeModalProps> = ({
                 </span>
               </div>
               <p className="text-xs text-gray-500">
-                Rooted Steeze Studios (RSS) Vote Integrity and Escrow Guarantee
+                Rooted Steeze Studios (RSS) Vote Integrity and Safe Payout Guarantee
               </p>
             </div>
           </div>
@@ -73,10 +73,10 @@ export const TrustBadgeModal: React.FC<TrustBadgeModalProps> = ({
             <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100 space-y-1">
               <div className="flex items-center gap-1.5 text-gray-900 font-bold">
                 <Scale className="w-4 h-4 text-emerald-600" />
-                <span>24-Hour Dispute Hold</span>
+                <span>24-Hour Safe Hold</span>
               </div>
               <p className="text-xs text-gray-500 leading-relaxed">
-                When a contest closes, organizer payouts are held in escrow for 24 hours to audit tallies and ensure fair results.
+                When a contest closes, organizer payouts are held safely for 24 hours to check final tallies and ensure fair results.
               </p>
             </div>
 

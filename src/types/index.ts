@@ -2,6 +2,8 @@ export type UserRole = 'voter' | 'organizer' | 'rss_admin';
 
 export type MomoNetwork = 'MTN' | 'Telecel' | 'AT';
 
+export type ContestType = 'free' | 'paid';
+
 export interface BundleTier {
   id: string;
   votes: number;
@@ -27,7 +29,7 @@ export interface Nominee {
   createdAt: string;
 }
 
-export type ContestStatus = 'active' | 'closed' | 'frozen' | 'disputed' | 'settled';
+export type ContestStatus = 'pending_review' | 'active' | 'closed' | 'frozen' | 'disputed' | 'settled' | 'rejected';
 
 export interface Contest {
   id: string;
@@ -42,13 +44,16 @@ export interface Contest {
   sponsorName?: string;
   startDate: string;
   endDate: string;
-  pricePerVote: number; // minimum 1.00 GHS
+  contestType: ContestType;
+  codePrefix?: string;
+  pricePerVote: number; // minimum 1.00 GHS for paid
   bundleTiers: BundleTier[];
   showPublicResults: boolean;
   collectVoterContacts: boolean;
   status: ContestStatus;
   escrowReleased: boolean;
   disputeDeadline?: string;
+  rejectionReason?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -96,12 +101,20 @@ export interface Transaction {
 export interface OrganizerAccount {
   id: string;
   email: string;
+  password?: string;
   organizationName: string;
   contactPhone: string;
   momoNumber: string;
   momoNetwork: MomoNetwork;
   status: 'pending' | 'approved' | 'suspended';
+  profilePictureUrl?: string;
+  bio?: string;
   createdAt: string;
+}
+
+export interface SystemSettings {
+  maxActiveContestsPerOrganizer: number;
+  maintenanceMode: boolean;
 }
 
 export interface AnomalyAlert {

@@ -131,7 +131,7 @@ export function generateResultsCertificatePdf(contest: Contest, nominees: Nomine
   doc.setFontSize(7.5);
   doc.setTextColor(161, 161, 170);
   doc.text('Certified by Rooted Steeze Studios (RSS) Electoral Technology Division.', 20, 262);
-  doc.text('This document constitutes a cryptographically sealed voting record. Powered by Paystack Ghana & Supabase.', 20, 267);
+  doc.text('This document is an official verified voting record. Powered by Paystack Ghana.', 20, 267);
   doc.text(`Generated on: ${new Date().toISOString()} • Timestamp Verified`, 20, 272);
 
   // Download PDF

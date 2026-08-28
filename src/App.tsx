@@ -7,10 +7,12 @@ import { ContestLanding } from './components/voter/ContestLanding';
 import { MyVotesLookup } from './components/voter/MyVotesLookup';
 import { ExplainerPage } from './components/voter/ExplainerPage';
 import { OrganizerPortal } from './components/organizer/OrganizerPortal';
+import { OrganizerAuth } from './components/organizer/OrganizerAuth';
 import { RssAdminPortal } from './components/admin/RssAdminPortal';
+import { AdminLogin } from './components/admin/AdminLogin';
 import { SignInModal } from './components/SignInModal';
 import { TrustBadgeModal } from './components/TrustBadgeModal';
-import { UserRole } from './types';
+import { UserRole, OrganizerAccount } from './types';
 import { store } from './lib/store';
 
 export default function App() {
@@ -20,6 +22,27 @@ export default function App() {
   const [isTrustModalOpen, setIsTrustModalOpen] = useState(false);
   const [isSignInModalOpen, setIsSignInModalOpen] = useState(false);
 
+  // Authentication States (Blocked until logged in)
+  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState<boolean>(() => {
+    try {
+      return sessionStorage.getItem('steeze_admin_auth') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const [currentOrganizer, setCurrentOrganizer] = useState<OrganizerAccount | null>(() => {
+    try {
+      const savedOrgId = sessionStorage.getItem('steeze_organizer_id');
+      if (savedOrgId) {
+        return store.organizers.find((o) => o.id === savedOrgId) || null;
+      }
+    } catch {
+      // Fallback
+    }
+    return null;
+  });
+
   // Reactive state from store
   const [contests, setContests] = useState(store.contests);
   const [nominees, setNominees] = useState(store.nominees);
@@ -28,6 +51,7 @@ export default function App() {
   const [votes, setVotes] = useState(store.votes);
   const [anomalies, setAnomalies] = useState(store.anomalies);
   const [lowDataMode, setLowDataMode] = useState(store.lowDataMode);
+  const [systemSettings, setSystemSettings] = useState(store.systemSettings);
 
   useEffect(() => {
     const unsub = store.subscribe(() => {
@@ -38,8 +62,18 @@ export default function App() {
       setVotes([...store.votes]);
       setAnomalies([...store.anomalies]);
       setLowDataMode(store.lowDataMode);
+      setSystemSettings({ ...store.systemSettings });
     });
     return unsub;
+  }, []);
+
+  // Periodic polling mechanism (12s interval) to update live vote counts on public pages without exhausting Realtime connections
+  useEffect(() => {
+    const pollInterval = setInterval(() => {
+      setContests([...store.contests]);
+      setNominees([...store.nominees]);
+    }, 12000);
+    return () => clearInterval(pollInterval);
   }, []);
 
   // URL and Hash router synchronization
@@ -150,81 +184,139 @@ export default function App() {
 
       {/* Main View Container */}
       <main className="flex-1">
-        {/* View: Home Page */}
-        {activeView === 'home' && (
-          <HomePage
-            contests={contests}
-            nominees={nominees}
-            onSelectContest={handleSelectContest}
-            onNavigate={navigateToView}
-            onOpenTrustModal={() => setIsTrustModalOpen(true)}
-          />
-        )}
+        {systemSettings.maintenanceMode && activeView !== 'admin' && activeView !== 'rss-admin' ? (
+          <div className="min-h-[70vh] flex items-center justify-center p-6 text-center">
+            <div className="max-w-md bg-white rounded-3xl border border-gray-200 p-8 shadow-xl space-y-4">
+              <div className="w-16 h-16 rounded-2xl bg-amber-100 text-amber-600 flex items-center justify-center mx-auto">
+                <span className="text-2xl font-bold">🛠️</span>
+              </div>
+              <h2 className="text-2xl font-bold text-gray-900">Platform Maintenance</h2>
+              <p className="text-sm text-gray-600 leading-relaxed">
+                SteezeVotes is under maintenance, please check back soon.
+              </p>
+              <div className="pt-2">
+                <span className="text-xs text-amber-700 font-mono font-semibold bg-amber-50 px-3 py-1.5 rounded-full border border-amber-200">
+                  Rooted Steeze Studios Engine Active
+                </span>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* View: Home Page */}
+            {activeView === 'home' && (
+              <HomePage
+                contests={contests}
+                nominees={nominees}
+                onSelectContest={handleSelectContest}
+                onNavigate={navigateToView}
+                onOpenTrustModal={() => setIsTrustModalOpen(true)}
+              />
+            )}
 
-        {/* View: Contests Listing */}
-        {activeView === 'contests' && (
-          <ContestsPage
-            contests={contests}
-            nominees={nominees}
-            onSelectContest={handleSelectContest}
-          />
-        )}
+            {/* View: Contests Listing */}
+            {activeView === 'contests' && (
+              <ContestsPage
+                contests={contests}
+                nominees={nominees}
+                onSelectContest={handleSelectContest}
+              />
+            )}
 
-        {/* View: Single Contest Landing Page */}
-        {activeView === 'contest-detail' && currentContest && (
-          <ContestLanding
-            contest={currentContest}
-            nominees={nominees}
-            lowDataMode={lowDataMode}
-            onOpenTrustModal={() => setIsTrustModalOpen(true)}
-            onViewMyVotes={() => navigateToView('my-votes', 'voter')}
-            onViewExplainer={() => navigateToView('explainer', 'voter')}
-            onBackToContests={() => navigateToView('contests', 'voter')}
-            onBackToHome={() => navigateToView('home', 'voter')}
-          />
-        )}
+            {/* View: Single Contest Landing Page */}
+            {activeView === 'contest-detail' && currentContest && (
+              <ContestLanding
+                contest={currentContest}
+                nominees={nominees}
+                lowDataMode={lowDataMode}
+                onOpenTrustModal={() => setIsTrustModalOpen(true)}
+                onViewMyVotes={() => navigateToView('my-votes', 'voter')}
+                onViewExplainer={() => navigateToView('explainer', 'voter')}
+                onBackToContests={() => navigateToView('contests', 'voter')}
+                onBackToHome={() => navigateToView('home', 'voter')}
+              />
+            )}
 
-        {/* View: My Votes Lookup */}
-        {activeView === 'my-votes' && (
-          <MyVotesLookup
-            onBackToContests={() => navigateToView('home', 'voter')}
-            onNavigateToContests={() => navigateToView('contests', 'voter')}
-          />
-        )}
+            {/* View: My Votes Lookup */}
+            {activeView === 'my-votes' && (
+              <MyVotesLookup
+                onBackToContests={() => navigateToView('home', 'voter')}
+                onNavigateToContests={() => navigateToView('contests', 'voter')}
+              />
+            )}
 
-        {/* View: Trust and Explainer Page */}
-        {activeView === 'explainer' && (
-          <ExplainerPage
-            onBackToContests={() => navigateToView('home', 'voter')}
-            onNavigateToOrganizers={() => navigateToView('organizer', 'organizer')}
-          />
-        )}
+            {/* View: Trust and Explainer Page */}
+            {activeView === 'explainer' && (
+              <ExplainerPage
+                onBackToContests={() => navigateToView('home', 'voter')}
+                onNavigateToOrganizers={() => navigateToView('organizer', 'organizer')}
+              />
+            )}
 
-        {/* View: Organizer Portal */}
-        {activeView === 'organizer' && (
-          <OrganizerPortal
-            contests={contests}
-            nominees={nominees}
-            organizers={organizers}
-            transactions={transactions}
-            votes={votes}
-            onSelectContestForPreview={handleSelectContest}
-            onBackToHome={() => navigateToView('home', 'voter')}
-          />
-        )}
+            {/* View: Organizer Portal */}
+            {activeView === 'organizer' && (
+              !currentOrganizer ? (
+                <OrganizerAuth
+                  onLoginSuccess={(org) => {
+                    setCurrentOrganizer(org);
+                    try {
+                      sessionStorage.setItem('steeze_organizer_id', org.id);
+                    } catch {}
+                  }}
+                  onBackToHome={() => navigateToView('home', 'voter')}
+                />
+              ) : (
+                <OrganizerPortal
+                  contests={contests}
+                  nominees={nominees}
+                  organizers={organizers}
+                  transactions={transactions}
+                  votes={votes}
+                  currentOrganizer={currentOrganizer}
+                  onSelectContestForPreview={handleSelectContest}
+                  onBackToHome={() => navigateToView('home', 'voter')}
+                  onLogout={() => {
+                    setCurrentOrganizer(null);
+                    try {
+                      sessionStorage.removeItem('steeze_organizer_id');
+                    } catch {}
+                  }}
+                />
+              )
+            )}
 
-        {/* View: RSS Admin Supervisory Console (Reachable via /admin directly) */}
-        {(activeView === 'admin' || activeView === 'rss-admin') && (
-          <RssAdminPortal
-            contests={contests}
-            nominees={nominees}
-            organizers={organizers}
-            transactions={transactions}
-            votes={votes}
-            anomalies={anomalies}
-            onSelectContestForPreview={handleSelectContest}
-            onBackToHome={() => navigateToView('home', 'voter')}
-          />
+            {/* View: RSS Admin Supervisory Console */}
+            {(activeView === 'admin' || activeView === 'rss-admin') && (
+              !isAdminAuthenticated ? (
+                <AdminLogin
+                  onLoginSuccess={() => {
+                    setIsAdminAuthenticated(true);
+                    try {
+                      sessionStorage.setItem('steeze_admin_auth', 'true');
+                    } catch {}
+                  }}
+                  onBackToHome={() => navigateToView('home', 'voter')}
+                />
+              ) : (
+                <RssAdminPortal
+                  contests={contests}
+                  nominees={nominees}
+                  organizers={organizers}
+                  transactions={transactions}
+                  votes={votes}
+                  anomalies={anomalies}
+                  onSelectContestForPreview={handleSelectContest}
+                  onBackToHome={() => navigateToView('home', 'voter')}
+                  onLogout={() => {
+                    setIsAdminAuthenticated(false);
+                    try {
+                      sessionStorage.removeItem('steeze_admin_auth');
+                    } catch {}
+                  }}
+                />
+              )
+            )}
+          </>
         )}
       </main>
 
@@ -248,7 +340,18 @@ export default function App() {
       <SignInModal
         isOpen={isSignInModalOpen}
         onClose={() => setIsSignInModalOpen(false)}
-        onNavigate={navigateToView}
+        onNavigateToMyVotes={(phone) => {
+          navigateToView('my-votes', 'voter');
+        }}
+        onNavigateToOrganizer={() => {
+          navigateToView('organizer', 'organizer');
+        }}
+        onOrganizerLogin={(org) => {
+          setCurrentOrganizer(org);
+          try {
+            sessionStorage.setItem('steeze_organizer_id', org.id);
+          } catch {}
+        }}
       />
 
     </div>
