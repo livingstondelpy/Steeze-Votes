@@ -59,7 +59,7 @@ export const FreeVoteModal: React.FC<FreeVoteModalProps> = ({
     setStep('otp');
   };
 
-  const handleVerifyOtp = (e: React.FormEvent) => {
+  const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setLoading(true);
@@ -70,7 +70,7 @@ export const FreeVoteModal: React.FC<FreeVoteModalProps> = ({
       return;
     }
 
-    const result = store.verifyAndCastFreeVote(
+    const result = await store.verifyAndCastFreeVote(
       phone,
       contest.id,
       nominee.id,
@@ -106,9 +106,9 @@ export const FreeVoteModal: React.FC<FreeVoteModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
       <div 
-        className="bg-white rounded-3xl border border-gray-200 shadow-2xl max-w-md w-full overflow-hidden text-gray-900 animate-in fade-in zoom-in-95 duration-150"
+        className="bg-white rounded-3xl border border-gray-200 shadow-2xl max-w-md w-full max-h-[90dvh] overflow-y-auto my-auto text-gray-900 animate-in fade-in zoom-in-95 duration-150"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Header */}

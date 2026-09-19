@@ -24,7 +24,7 @@ export const ExplainerPage: React.FC<ExplainerPageProps> = ({
   onNavigateToOrganizers,
 }) => {
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-900 py-10 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-gray-50 text-gray-900 py-6 sm:py-8 pb-28 sm:pb-32 px-4 sm:px-6 lg:px-8">
       <div className="max-w-4xl mx-auto space-y-10">
         
         {/* Navigation Breadcrumb */}

@@ -4,157 +4,132 @@ import { Trophy, ShieldCheck, Smartphone, Lock, HelpCircle, Heart, ArrowRight } 
 interface FooterProps {
   onNavigate: (view: string, role?: 'voter' | 'organizer' | 'rss_admin') => void;
   onOpenTrustModal: () => void;
+  isDark?: boolean;
 }
 
-export const Footer: React.FC<FooterProps> = ({ onNavigate, onOpenTrustModal }) => {
+export const Footer: React.FC<FooterProps> = ({ onNavigate, onOpenTrustModal, isDark = false }) => {
   return (
-    <footer className="bg-white border-t border-gray-200 text-gray-600 mt-auto">
+    <footer className="bg-white border-t border-slate-200 text-slate-600 mt-auto">
       {/* Upper footer */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 lg:py-16">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-8 lg:gap-12">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 lg:py-12">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-8 lg:gap-10">
           
           {/* Brand Col */}
-          <div className="lg:col-span-2 space-y-4">
+          <div className="lg:col-span-2 space-y-3">
             <div 
-              className="flex items-center gap-2.5 cursor-pointer" 
+              className="flex items-center gap-2 cursor-pointer" 
               onClick={() => onNavigate('home', 'voter')}
             >
-              <div className="w-8 h-8 rounded-lg bg-amber-500 flex items-center justify-center text-white shadow-xs">
+              <div className="w-7 h-7 rounded-lg bg-rose-600 flex items-center justify-center text-white shadow-2xs">
                 <Trophy className="w-4 h-4" />
               </div>
-              <span className="text-xl font-bold text-gray-900 tracking-tight">
-                Steeze<span className="text-amber-500">Votes</span>
+              <span className="text-lg font-bold tracking-tight text-slate-900">
+                Steeze<span className="text-rose-600">Votes</span>
               </span>
             </div>
             
-            <p className="text-sm text-gray-500 max-w-sm leading-relaxed">
-              Ghana's trusted mobile money voting platform for awards, pageants, campus elections, and entertainment events. Verified votes, instant MoMo payouts, and 100% transparent results.
+            <p className="text-xs text-slate-500 max-w-sm leading-relaxed">
+              Ghana&apos;s verified voting platform for awards and pageants. Secure Mobile Money checkout (MTN MoMo, Telecel Cash, AT Money) with instant digital receipts and public standings.
             </p>
 
-            <div className="pt-2 flex flex-wrap items-center gap-2 text-xs text-gray-600 font-medium">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-100 text-gray-700">
+            <div className="pt-1 flex flex-wrap items-center gap-1.5 text-xs font-medium text-slate-600">
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-slate-50 border border-slate-200">
                 <Smartphone className="w-3.5 h-3.5 text-amber-600" /> MTN MoMo
               </span>
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-100 text-gray-700">
-                <Smartphone className="w-3.5 h-3.5 text-red-600" /> Telecel Cash
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-slate-50 border border-slate-200">
+                <Smartphone className="w-3.5 h-3.5 text-rose-600" /> Telecel Cash
               </span>
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-100 text-gray-700">
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-slate-50 border border-slate-200">
                 <Smartphone className="w-3.5 h-3.5 text-blue-600" /> AT Money
               </span>
             </div>
           </div>
 
-          {/* Voters Col */}
+          {/* Information & Voters Col */}
           <div>
-            <h3 className="text-xs font-semibold text-gray-900 uppercase tracking-wider mb-4">
-              For Voters
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-900 mb-3">
+              SteezeVotes
             </h3>
-            <ul className="space-y-2.5 text-sm">
+            <ul className="space-y-2 text-xs">
+              <li>
+                <button
+                  onClick={() => onNavigate('about', 'voter')}
+                  className="text-slate-500 hover:text-slate-900 transition-colors text-left"
+                >
+                  About SteezeVotes
+                </button>
+              </li>
               <li>
                 <button
                   onClick={() => onNavigate('contests', 'voter')}
-                  className="hover:text-amber-600 transition-colors text-left"
+                  className="text-slate-500 hover:text-slate-900 transition-colors text-left"
                 >
-                  Browse Live Contests
+                  Active Contests
                 </button>
               </li>
               <li>
                 <button
                   onClick={() => onNavigate('my-votes', 'voter')}
-                  className="hover:text-amber-600 transition-colors text-left"
+                  className="text-slate-500 hover:text-slate-900 transition-colors text-left"
                 >
-                  Check My Vote and Receipts
-                </button>
-              </li>
-              <li>
-                <button
-                  onClick={() => onNavigate('how-it-works', 'voter')}
-                  className="hover:text-amber-600 transition-colors text-left"
-                >
-                  How Voting Works
+                  Check My Votes
                 </button>
               </li>
             </ul>
           </div>
 
-          {/* Organizers Col */}
+          {/* Trust & Verification Col */}
           <div>
-            <h3 className="text-xs font-semibold text-gray-900 uppercase tracking-wider mb-4">
-              For Organizers
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-900 mb-3">
+              Trust &amp; Verification
             </h3>
-            <ul className="space-y-2.5 text-sm">
+            <ul className="space-y-2 text-xs">
               <li>
                 <button
-                  onClick={() => onNavigate('organizer', 'organizer')}
-                  className="text-gray-700 hover:text-amber-600 font-medium transition-colors text-left flex items-center gap-1"
+                  onClick={() => onNavigate('about', 'voter')}
+                  className="text-slate-500 hover:text-slate-900 transition-colors text-left"
                 >
-                  Host a Contest <ArrowRight className="w-3.5 h-3.5" />
-                </button>
-              </li>
-              <li>
-                <button
-                  onClick={() => onNavigate('organizer', 'organizer')}
-                  className="hover:text-amber-600 transition-colors text-left"
-                >
-                  Organizer Log In
-                </button>
-              </li>
-            </ul>
-          </div>
-
-          {/* Security Col */}
-          <div>
-            <h3 className="text-xs font-semibold text-gray-900 uppercase tracking-wider mb-4">
-              Trust and Security
-            </h3>
-            <ul className="space-y-2.5 text-sm">
-              <li>
-                <button
-                  onClick={() => onNavigate('how-it-works', 'voter')}
-                  className="hover:text-amber-600 transition-colors text-left"
-                >
-                  Vote Integrity Policy
-                </button>
-              </li>
-              <li>
-                <button
-                  onClick={() => onNavigate('how-it-works', 'voter')}
-                  className="hover:text-amber-600 transition-colors text-left"
-                >
-                  24-Hour Payout Protection
+                  Verified by SteezeVotes
                 </button>
               </li>
               <li>
                 <button
                   onClick={onOpenTrustModal}
-                  className="hover:text-amber-600 transition-colors text-left flex items-center gap-1.5"
+                  className="text-slate-500 hover:text-slate-900 transition-colors text-left"
                 >
-                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                  Anti-Fraud Protection
+                  Verification System
                 </button>
               </li>
               <li>
-                <span className="text-gray-400 text-xs">
-                  Accra, Ghana
-                </span>
+                <button
+                  onClick={onOpenTrustModal}
+                  className="text-slate-500 hover:text-slate-900 transition-colors text-left"
+                >
+                  Anti-Fraud Ledger
+                </button>
               </li>
             </ul>
           </div>
 
         </div>
-      </div>
 
-      {/* Lower footer */}
-      <div className="border-t border-gray-100 bg-gray-50 py-6">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-gray-500">
-          <div className="flex items-center gap-2">
-            <span>Powered by</span>
-            <span className="font-semibold text-gray-800">Rooted Steeze Studios (RSS)</span>
-            <span>•</span>
-            <span>Accra, Ghana</span>
+        {/* Bottom Bar: Copyright & Low-visibility Organizer Link ONLY */}
+        <div className="mt-10 pt-6 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
+          <p>© {new Date().getFullYear()} SteezeVotes Ghana. Powered by Rooted Steeze Studios (RSS).</p>
+          <div className="flex items-center gap-4 text-xs">
+            <button
+              onClick={() => onNavigate('organizer', 'organizer')}
+              className="text-slate-400 hover:text-slate-600 transition-colors text-[11px]"
+            >
+              Organizer Access
+            </button>
+            <span className="text-slate-300">•</span>
+            <span className="flex items-center gap-1.5 text-emerald-700 font-medium">
+              <ShieldCheck className="w-4 h-4" /> Verified Voting
+            </span>
           </div>
-          <p>© 2026 SteezeVotes. All rights reserved.</p>
         </div>
+
       </div>
     </footer>
   );

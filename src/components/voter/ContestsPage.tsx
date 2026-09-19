@@ -7,7 +7,8 @@ import {
   Layers, 
   Filter,
   ArrowLeft,
-  ShieldCheck
+  ShieldCheck,
+  Trophy
 } from 'lucide-react';
 import { Contest, Nominee } from '../../types';
 
@@ -16,6 +17,7 @@ interface ContestsPageProps {
   nominees: Nominee[];
   onSelectContest: (contestId: string) => void;
   onBackToHome: () => void;
+  isDark?: boolean;
 }
 
 export const ContestsPage: React.FC<ContestsPageProps> = ({
@@ -23,21 +25,27 @@ export const ContestsPage: React.FC<ContestsPageProps> = ({
   nominees,
   onSelectContest,
   onBackToHome,
+  isDark = true,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
-  const [selectedStatus, setSelectedStatus] = useState<'all' | 'active' | 'closed'>('all');
+  const [selectedStatus, setSelectedStatus] = useState<'all' | 'active' | 'ended'>('all');
 
   const categories = ['All', 'Music & Entertainment', 'Nightlife & Culture', 'Pageantry & Fashion'];
 
   const filteredContests = contests.filter((c) => {
-    // Only active or closed contests are visible to public voters
-    const isPublic = c.status === 'active' || c.status === 'closed';
+    const isPublic = c.status === 'active' || c.status === 'ended' || c.status === 'settled';
     const matchesCat = selectedCategory === 'All' || c.category === selectedCategory;
-    const matchesStatus = selectedStatus === 'all' || c.status === selectedStatus;
-    const matchesSearch = c.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          c.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          c.organizerName.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesStatus = 
+      selectedStatus === 'all' 
+        ? true 
+        : selectedStatus === 'active' 
+        ? c.status === 'active' 
+        : (c.status === 'ended' || c.status === 'settled');
+    const matchesSearch = 
+      c.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      c.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      c.organizerName.toLowerCase().includes(searchQuery.toLowerCase());
     return isPublic && matchesCat && matchesStatus && matchesSearch;
   });
 
@@ -61,178 +69,174 @@ export const ContestsPage: React.FC<ContestsPageProps> = ({
   };
 
   return (
-    <div className="bg-gray-50 text-gray-900 min-h-screen py-8 sm:py-12">
+    <div className="min-h-screen py-6 sm:py-8 pb-28 sm:pb-32 bg-slate-50 text-slate-900">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         
         {/* Top Header & Breadcrumb */}
-        <div className="space-y-4 mb-8">
+        <div className="space-y-3 mb-6">
           <button
             onClick={onBackToHome}
-            className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-500 hover:text-gray-900 transition-colors"
+            className="min-h-[44px] inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-slate-900 transition-colors"
           >
-            <ArrowLeft className="w-3.5 h-3.5" /> Back to Home
+            <ArrowLeft className="w-4 h-4" /> Back to Home
           </button>
 
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">
-                Explore Contests & Awards
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-rose-600 mb-1">
+                <Trophy className="w-3.5 h-3.5" />
+                <span>Verified Contests</span>
+              </div>
+              <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">
+                Contests &amp; Voting Ballots
               </h1>
-              <p className="text-sm text-gray-500 mt-1">
-                Find ongoing contests across Ghana and support your nominees.
+              <p className="text-xs sm:text-sm text-slate-500 mt-1">
+                Explore active public polls and cast verified votes in real time.
               </p>
             </div>
 
             {/* Total Active badge */}
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white border border-gray-200 text-xs font-semibold text-gray-700 shadow-xs self-start sm:self-auto">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <div className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white border border-slate-200 text-xs font-medium text-emerald-700 shadow-2xs self-start sm:self-auto">
+              <span className="w-2 h-2 rounded-full bg-emerald-500" />
               <span>{contests.filter(c => c.status === 'active').length} Active Contests</span>
             </div>
           </div>
         </div>
 
         {/* Search & Filter Bar */}
-        <div className="bg-white rounded-2xl border border-gray-200 p-4 mb-8 shadow-xs space-y-4">
+        <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 mb-6 shadow-2xs space-y-4">
           <div className="relative">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search by contest title, organizer, or category..."
-              className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white transition-all placeholder:text-gray-400"
+              placeholder="Search contest title, organizer, or category..."
+              className="w-full min-h-[44px] pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 focus:outline-none focus:border-rose-500 focus:bg-white transition-all placeholder:text-slate-400"
             />
           </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-3 pt-1 border-t border-gray-100">
-            {/* Category Pills */}
-            <div className="flex flex-wrap items-center gap-1.5">
-              {categories.map((cat) => (
-                <button
-                  key={cat}
-                  onClick={() => setSelectedCategory(cat)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                    selectedCategory === cat
-                      ? 'bg-amber-500 text-white shadow-xs'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  }`}
-                >
-                  {cat}
-                </button>
-              ))}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-3 border-t border-slate-100">
+            {/* Category Switcher Pills */}
+            <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar scroll-smooth flex-nowrap py-1">
+              {categories.map((cat) => {
+                const isActive = selectedCategory === cat;
+                return (
+                  <button
+                    key={cat}
+                    onClick={() => setSelectedCategory(cat)}
+                    className={`min-h-[44px] px-3.5 py-2 rounded-xl text-xs font-medium whitespace-nowrap transition-colors inline-flex items-center justify-center ${
+                      isActive
+                        ? 'bg-slate-900 text-white shadow-2xs'
+                        : 'bg-slate-100 text-slate-600 hover:text-slate-900 hover:bg-slate-200/70'
+                    }`}
+                  >
+                    {cat}
+                  </button>
+                );
+              })}
             </div>
 
-            {/* Status Selector */}
-            <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-lg">
-              <button
-                onClick={() => setSelectedStatus('all')}
-                className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${
-                  selectedStatus === 'all' ? 'bg-white text-gray-900 shadow-xs' : 'text-gray-500'
-                }`}
-              >
-                All
-              </button>
-              <button
-                onClick={() => setSelectedStatus('active')}
-                className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${
-                  selectedStatus === 'active' ? 'bg-white text-gray-900 shadow-xs' : 'text-gray-500'
-                }`}
-              >
-                Active
-              </button>
-              <button
-                onClick={() => setSelectedStatus('closed')}
-                className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${
-                  selectedStatus === 'closed' ? 'bg-white text-gray-900 shadow-xs' : 'text-gray-500'
-                }`}
-              >
-                Concluded
-              </button>
+            {/* Status Filter */}
+            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200/70 shrink-0 self-start sm:self-auto">
+              {(['all', 'active', 'ended'] as const).map((st) => (
+                <button
+                  key={st}
+                  onClick={() => setSelectedStatus(st)}
+                  className={`min-h-[40px] px-3.5 py-1.5 text-xs font-medium rounded-lg transition-colors inline-flex items-center justify-center ${
+                    selectedStatus === st
+                      ? 'bg-white text-slate-900 shadow-2xs font-semibold'
+                      : 'text-slate-500 hover:text-slate-900'
+                  }`}
+                >
+                  {st === 'all' ? 'All' : st === 'active' ? 'Live' : 'Ended'}
+                </button>
+              ))}
             </div>
           </div>
         </div>
 
         {/* Contests Grid */}
         {filteredContests.length === 0 ? (
-          <div className="text-center py-16 bg-white rounded-2xl border border-gray-200 p-8 space-y-3">
-            <Search className="w-10 h-10 text-gray-300 mx-auto" />
-            <h3 className="text-base font-bold text-gray-900">No contests found</h3>
-            <p className="text-xs text-gray-500 max-w-sm mx-auto">
-              We could not find any contest matching your search. Try adjusting the category or search terms.
+          <div className="text-center py-16 bg-white rounded-2xl border border-slate-200 p-8 space-y-3 shadow-2xs">
+            <Search className="w-8 h-8 text-slate-400 mx-auto" />
+            <h3 className="text-sm font-semibold text-slate-900">No Contests Found</h3>
+            <p className="text-xs text-slate-500 max-w-sm mx-auto">
+              We could not find any awards or pageants matching your criteria. Try resetting your search filter.
             </p>
             <button
               onClick={() => { setSearchQuery(''); setSelectedCategory('All'); setSelectedStatus('all'); }}
-              className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-800 text-xs font-semibold rounded-lg transition-colors"
+              className="min-h-[44px] px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium rounded-xl transition-colors border border-slate-200 inline-flex items-center justify-center active:scale-98"
             >
               Reset Filters
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             {filteredContests.map((contest) => {
               const totalVotes = getTotalVotes(contest.id);
               const nomineeCount = getNomineeCount(contest.id);
-              const isClosed = contest.status === 'closed';
+              const isClosed = contest.status === 'ended' || contest.status === 'settled';
 
               return (
                 <div
                   key={contest.id}
                   onClick={() => onSelectContest(contest.id)}
-                  className="group bg-white rounded-2xl border border-gray-200 overflow-hidden hover:border-amber-300 hover:shadow-md transition-all duration-200 cursor-pointer flex flex-col"
+                  className="group bg-white rounded-2xl border border-slate-200 overflow-hidden hover:border-slate-300 hover:shadow-md transition-all duration-200 cursor-pointer flex flex-col justify-between shadow-2xs"
                 >
-                  {/* Banner Image */}
-                  <div className="relative aspect-[16/9] w-full overflow-hidden bg-gray-100">
-                    <img
-                      src={contest.bannerUrl}
-                      alt={contest.title}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    />
-                    
-                    {/* Category Tag */}
-                    <div className="absolute top-3 left-3">
-                      <span className="px-2.5 py-1 rounded-md text-[11px] font-semibold bg-white/90 backdrop-blur-xs text-gray-800 shadow-xs">
-                        {contest.category}
-                      </span>
+                  <div>
+                    {/* Flyer / Poster Image */}
+                    <div className="relative aspect-[4/5] w-full overflow-hidden bg-slate-100">
+                      <img
+                        src={contest.bannerUrl}
+                        alt={contest.title}
+                        className="w-full h-full object-cover group-hover:scale-102 transition-transform duration-300"
+                        loading="lazy"
+                      />
+                      
+                      {/* Top Badges */}
+                      <div className="absolute top-2.5 left-2.5">
+                        <span className="px-2.5 py-1 rounded-md text-[10px] font-semibold bg-slate-900/85 text-white">
+                          {contest.category}
+                        </span>
+                      </div>
+
+                      <div className="absolute top-2.5 right-2.5">
+                        <span className={`px-2.5 py-1 rounded-md text-[10px] font-medium flex items-center gap-1 shadow-2xs ${
+                          isClosed 
+                            ? 'bg-slate-100 text-slate-600' 
+                            : 'bg-emerald-600 text-white'
+                        }`}>
+                          <Clock className="w-3 h-3" />
+                          {formatDaysLeft(contest.endDate)}
+                        </span>
+                      </div>
                     </div>
 
-                    {/* Status / Time Left */}
-                    <div className="absolute top-3 right-3">
-                      <span className={`px-2.5 py-1 rounded-md text-[11px] font-semibold flex items-center gap-1 shadow-xs ${
-                        isClosed 
-                          ? 'bg-gray-900 text-white' 
-                          : 'bg-amber-500 text-white'
-                      }`}>
-                        <Clock className="w-3 h-3" />
-                        {formatDaysLeft(contest.endDate)}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Card Content */}
-                  <div className="p-5 flex-1 flex flex-col justify-between space-y-4">
-                    <div>
-                      <p className="text-xs text-gray-500 font-medium mb-1">
+                    {/* Card Content */}
+                    <div className="p-4 sm:p-5 space-y-1.5">
+                      <span className="text-[11px] font-medium text-slate-500 block">
                         By {contest.organizerName}
-                      </p>
-                      <h3 className="text-base font-bold text-gray-900 group-hover:text-amber-600 transition-colors line-clamp-2 leading-snug">
+                      </span>
+                      <h3 className="text-base font-semibold text-slate-900 group-hover:text-rose-600 transition-colors line-clamp-1">
                         {contest.title}
                       </h3>
-                      <p className="text-xs text-gray-500 mt-2 line-clamp-2 leading-relaxed">
+                      <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">
                         {contest.description}
                       </p>
                     </div>
+                  </div>
 
-                    {/* Stats & CTA */}
-                    <div className="pt-3 border-t border-gray-100 flex items-center justify-between">
-                      <div className="text-xs text-gray-600">
-                        <span className="font-bold text-gray-900">{totalVotes.toLocaleString()}</span> votes • {nomineeCount} nominees
-                      </div>
-
-                      <button className="px-4 py-2 bg-amber-500 group-hover:bg-amber-600 text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1">
-                        {isClosed ? 'View Results' : 'Vote Now'}
-                        <ChevronRight className="w-3.5 h-3.5" />
-                      </button>
+                  {/* Stats & CTA */}
+                  <div className="p-4 sm:p-5 pt-3 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between gap-3">
+                    <div className="text-xs text-slate-500">
+                      <strong className="text-slate-900 font-semibold tabular-nums">{totalVotes.toLocaleString()}</strong> votes • {nomineeCount} candidates
                     </div>
+
+                    <button className="min-h-[44px] py-2 px-3.5 bg-rose-600 hover:bg-rose-700 text-white font-medium text-xs rounded-xl transition-colors inline-flex items-center gap-1 shadow-2xs active:scale-98">
+                      {isClosed ? 'Results' : 'Enter Ballot'}
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
                   </div>
 
                 </div>

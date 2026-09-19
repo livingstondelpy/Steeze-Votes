@@ -1,1 +1,102 @@
 @import "tailwindcss";
+
+@layer base {
+  :root {
+    --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --font-display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+    --font-body: "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --bg-page-light: #fbfbfc;
+    --bg-page-dark: #0f172a;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    background-color: #fbfbfc;
+    color: #0f172a;
+    line-height: 1.6;
+    letter-spacing: 0.005em;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  h1, h2, h3, h4, h5, h6, .font-display {
+    font-family: var(--font-display);
+    letter-spacing: normal;
+    line-height: 1.3;
+  }
+
+  .font-sans {
+    font-family: var(--font-sans);
+  }
+
+  .font-mono {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  }
+
+  h1 {
+    line-height: 1.25;
+  }
+
+  h2 {
+    line-height: 1.3;
+  }
+
+  h3 {
+    line-height: 1.35;
+  }
+
+  p {
+    line-height: 1.65;
+  }
+
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* Design Tokens & Refined Minimalist Action Accents */
+.bg-primary-action {
+  background-color: #e11d48;
+}
+
+.bg-primary-action-hover:hover {
+  background-color: #be123c;
+}
+
+.bg-crown-gradient {
+  background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
+}
+
+.bg-live-pulse {
+  background-color: #059669;
+}
+
+.text-title-gradient {
+  color: #e11d48;
+}
+
+.bg-surface-highlight {
+  background-color: rgba(225, 29, 72, 0.05);
+}
+
+/* Minimalist Clean Surfaces */
+.glass-card-light {
+  background: #ffffff;
+  border: 1px solid #f1f5f9;
+}
+
+.glass-card-dark {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+}
+
+/* Clean Scrollbar for Pill Navigations */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+

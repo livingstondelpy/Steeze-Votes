@@ -10,7 +10,8 @@ import {
   RefreshCw,
   Lock,
   Tag,
-  Zap
+  Zap,
+  CreditCard
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { Nominee, Contest, BundleTier, MomoNetwork, VoteRecord, Transaction } from '../../types';
@@ -22,6 +23,7 @@ interface PaidVoteModalProps {
   onClose: () => void;
   onSuccess: (receipt: VoteRecord, tx: Transaction) => void;
   onOpenTrustModal: () => void;
+  isDark?: boolean;
 }
 
 export const PaidVoteModal: React.FC<PaidVoteModalProps> = ({
@@ -30,20 +32,48 @@ export const PaidVoteModal: React.FC<PaidVoteModalProps> = ({
   onClose,
   onSuccess,
   onOpenTrustModal,
+  isDark = true,
 }) => {
+  // Step 1: Bundle selection (preset or custom)
+  const defaultTiers: BundleTier[] = contest.bundleTiers.length > 0 ? contest.bundleTiers : [
+    { votes: 1, priceGhs: 1, popular: false },
+    { votes: 5, priceGhs: 5, popular: false },
+    { votes: 20, priceGhs: 20, popular: false },
+    { votes: 50, priceGhs: 50, popular: false },
+    { votes: 100, priceGhs: 100, popular: true },
+  ];
+
   const [selectedTier, setSelectedTier] = useState<BundleTier>(
-    contest.bundleTiers.find((t) => t.popular) || contest.bundleTiers[0]
+    defaultTiers.find((t) => t.popular) || defaultTiers[0]
   );
+  const [isCustomVotes, setIsCustomVotes] = useState(false);
+  const [customVoteCount, setCustomVoteCount] = useState<number>(150);
+
+  // Step 2: Voter Verification & MoMo provider
   const [momoNetwork, setMomoNetwork] = useState<MomoNetwork>('MTN');
   const [voterPhone, setVoterPhone] = useState('');
   const [consentedMarketing, setConsentedMarketing] = useState(false);
-  const [step, setStep] = useState<'select' | 'payment_prompt'>('select');
+  
+  // Checkout flow state: 1: bundle, 2: momo details, 3: ussd prompt / approval
+  const [step, setStep] = useState<'bundle' | 'checkout' | 'processing'>('bundle');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const priceGhs = selectedTier.priceGhs;
+  // Price calculations
+  const unitRate = defaultTiers[0]?.priceGhs ? defaultTiers[0].priceGhs / defaultTiers[0].votes : 1.0;
+  const activeVotes = isCustomVotes ? Math.max(1, customVoteCount) : selectedTier.votes;
+  const priceGhs = isCustomVotes ? +(activeVotes * unitRate).toFixed(2) : selectedTier.priceGhs;
   const paystackFeeGhs = calculatePaystackFee(priceGhs);
   const totalChargedGhs = +(priceGhs + paystackFeeGhs).toFixed(2);
+
+  const handleGoToCheckout = () => {
+    setError(null);
+    if (isCustomVotes && (!customVoteCount || customVoteCount < 1)) {
+      setError('Please enter at least 1 vote for custom supporter volume.');
+      return;
+    }
+    setStep('checkout');
+  };
 
   const handleInitiatePayment = (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,340 +81,384 @@ export const PaidVoteModal: React.FC<PaidVoteModalProps> = ({
 
     const clean = voterPhone.replace(/[^0-9]/g, '');
     if (clean.length < 9) {
-      setError('Please enter a valid 9 or 10-digit Ghanaian mobile number.');
+      setError('Please enter a valid 9 or 10-digit Ghanaian mobile number (e.g., 0244123456).');
       return;
     }
 
-    setStep('payment_prompt');
+    setStep('processing');
   };
 
   const handleSimulateMoMoApproval = () => {
     setLoading(true);
     setError(null);
 
-    setTimeout(() => {
-      const result = store.processPaidVote({
-        contestId: contest.id,
-        nomineeId: nominee.id,
-        voteCount: selectedTier.votes,
-        amountGhs: selectedTier.priceGhs,
-        voterPhone,
-        momoNetwork,
-        consentedMarketing,
-      });
+    setTimeout(async () => {
+      try {
+        const result = await store.processPaidVote({
+          contestId: contest.id,
+          nomineeId: nominee.id,
+          voteCount: activeVotes,
+          amountGhs: priceGhs,
+          voterPhone,
+          momoNetwork,
+          consentedMarketing,
+        });
 
-      setLoading(false);
+        setLoading(false);
 
-      if (!result.success || !result.receipt || !result.transaction) {
-        setError(result.message);
-        setStep('select');
-        return;
+        if (!result.success || !result.receipt || !result.transaction) {
+          setError(result.message);
+          setStep('checkout');
+          return;
+        }
+
+        // Confetti burst
+        confetti({
+          particleCount: 120,
+          spread: 90,
+          origin: { y: 0.6 },
+          colors: ['#e11d48', '#dc2626', '#10b981', '#f59e0b'],
+        });
+
+        onSuccess(result.receipt, result.transaction);
+        onClose();
+      } catch (err: unknown) {
+        setLoading(false);
+        const errObj = err as { message?: string };
+        setError(errObj.message || 'Payment verification failed. Please try again.');
+        setStep('checkout');
       }
-
-      // Confetti animation
-      confetti({
-        particleCount: 100,
-        spread: 80,
-        origin: { y: 0.6 },
-        colors: ['#F59E0B', '#10B981', '#F59E0B'],
-      });
-
-      onSuccess(result.receipt, result.transaction);
-      onClose();
     }, 1500);
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
       <div 
-        className="bg-white rounded-3xl border border-gray-200 shadow-2xl max-w-lg w-full overflow-hidden text-gray-900 animate-in fade-in zoom-in-95 duration-150"
+        className="rounded-2xl bg-white text-slate-900 p-5 sm:p-7 max-w-lg w-full max-h-[90dvh] overflow-y-auto my-auto border border-slate-200 shadow-xl relative animate-in fade-in zoom-in-95 duration-150"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Header */}
-        <div className="flex items-center justify-between p-5 border-b border-gray-100">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center font-bold">
-              <Smartphone className="w-5 h-5" />
+        <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-rose-600 flex items-center justify-center text-white shadow-2xs">
+              <Smartphone className="w-4 h-4" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-gray-900">Buy Mobile Money Votes</h2>
-              <p className="text-xs text-gray-500">Supporting {nominee.stageName || nominee.name}</p>
+              <span className="text-[11px] font-medium text-slate-500 block">
+                Official Ballot Checkout
+              </span>
+              <h3 className="text-sm font-semibold text-slate-900 truncate max-w-[260px] sm:max-w-xs">
+                Vote For {nominee.stageName || nominee.name}
+              </h3>
             </div>
           </div>
 
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Modal Body */}
-        <div className="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
-          
-          {/* Target Nominee Banner */}
-          <div className="flex items-center gap-3 p-3 rounded-2xl bg-gray-50 border border-gray-100">
+        {/* Candidate Context Pill */}
+        <div className="mt-3.5 p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
             <img
               src={nominee.photoUrl}
               alt={nominee.name}
-              className="w-12 h-12 rounded-xl object-cover border border-gray-200"
+              className="w-9 h-11 rounded-lg object-cover border border-slate-200 shrink-0"
             />
-            <div className="flex-1 min-w-0">
-              <h4 className="text-sm font-bold text-gray-900 truncate">
+            <div className="min-w-0">
+              <p className="font-semibold text-slate-900 text-xs truncate">
                 {nominee.stageName || nominee.name}
-              </h4>
-              <p className="text-xs text-gray-500 font-mono">
-                Code: {nominee.nomineeCode} • {contest.title}
+              </p>
+              <p className="text-[10px] text-slate-500 font-mono">
+                Code: <strong className="text-slate-800">{nominee.nomineeCode}</strong>
               </p>
             </div>
           </div>
+          <span className="px-2 py-0.5 rounded-md text-[10px] font-medium bg-white text-slate-600 border border-slate-200">
+            {contest.category}
+          </span>
+        </div>
 
-          {error && (
-            <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-start gap-2.5">
-              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-              <span>{error}</span>
+        {error && (
+          <div className="mt-3 p-2.5 rounded-lg bg-red-50 border border-red-200 text-red-700 text-xs flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span>{error}</span>
+          </div>
+        )}
+
+        {/* STEP 1: SELECT VOTE BUNDLE */}
+        {step === 'bundle' && (
+          <div className="mt-4 space-y-3.5">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-semibold text-slate-900">
+                Step 1: Choose Vote Bundle
+              </label>
+              <span className="text-[11px] text-slate-500">
+                GHC 1.00 = 1 Vote
+              </span>
             </div>
-          )}
 
-          {step === 'select' ? (
-            <form onSubmit={handleInitiatePayment} className="space-y-6">
-              
-              {/* Payment Method Selector (MoMo Primary, Card Secondary) */}
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2">
-                  Payment Method
+            {/* Fast Bundle Pills */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {defaultTiers.map((tier) => {
+                const isSelected = !isCustomVotes && selectedTier.votes === tier.votes;
+                return (
+                  <button
+                    key={tier.votes}
+                    type="button"
+                    onClick={() => {
+                      setIsCustomVotes(false);
+                      setSelectedTier(tier);
+                    }}
+                    className={`relative p-2.5 rounded-xl border text-left transition-colors ${
+                      isSelected
+                        ? 'bg-rose-50/70 border-rose-600 text-slate-900 ring-1 ring-rose-600'
+                        : 'bg-white border-slate-200 hover:border-slate-300 text-slate-700'
+                    }`}
+                  >
+                    {tier.popular && (
+                      <span className="absolute -top-2 right-2 px-1.5 py-0.2 rounded text-[9px] font-semibold uppercase bg-rose-600 text-white shadow-2xs">
+                        Popular
+                      </span>
+                    )}
+                    <p className="text-sm font-semibold text-slate-900 tabular-nums">
+                      {tier.votes} {tier.votes === 1 ? 'Vote' : 'Votes'}
+                    </p>
+                    <p className="text-xs font-medium text-rose-600 mt-0.5">
+                      GHC {tier.priceGhs.toFixed(2)}
+                    </p>
+                  </button>
+                );
+              })}
+
+              {/* Custom Input Option Pill */}
+              <button
+                type="button"
+                onClick={() => setIsCustomVotes(true)}
+                className={`p-2.5 rounded-xl border text-left transition-colors ${
+                  isCustomVotes
+                    ? 'bg-rose-50/70 border-rose-600 ring-1 ring-rose-600'
+                    : 'bg-white border-slate-200 hover:border-slate-300 text-slate-700'
+                }`}
+              >
+                <p className="text-xs font-semibold text-slate-900">
+                  Custom Bulk
+                </p>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  Type any votes
+                </p>
+              </button>
+            </div>
+
+            {/* Custom Input Field if enabled */}
+            {isCustomVotes && (
+              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1.5">
+                <label className="text-[11px] font-medium text-slate-600 block">
+                  Enter High-Volume Supporter Votes:
                 </label>
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="p-3 rounded-xl border-2 border-amber-500 bg-amber-50/70 text-amber-950 font-bold text-xs flex items-center justify-between">
-                    <span className="flex items-center gap-1.5">
-                      <Smartphone className="w-4 h-4 text-amber-600" />
-                      Mobile Money (MoMo)
-                    </span>
-                    <span className="text-[10px] font-bold bg-amber-500 text-white px-2 py-0.5 rounded-full">
-                      RECOMMENDED
-                    </span>
-                  </div>
-
-                  <div className="p-3 rounded-xl border border-gray-200 bg-gray-50 text-gray-500 text-xs flex items-center justify-between opacity-80 cursor-not-allowed">
-                    <span className="flex items-center gap-1.5">
-                      <Lock className="w-3.5 h-3.5 text-gray-400" />
-                      Debit/Credit Card
-                    </span>
-                    <span className="text-[10px] text-gray-400 font-medium">
-                      Secondary
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Vote Package Tiers Selection */}
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2.5">
-                  1. Select Vote Package
-                </label>
-
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-                  {contest.bundleTiers.map((tier) => {
-                    const isSelected = selectedTier.id === tier.id;
-                    return (
-                      <button
-                        type="button"
-                        key={tier.id}
-                        onClick={() => setSelectedTier(tier)}
-                        className={`relative p-3 rounded-xl border text-left transition-all ${
-                          isSelected
-                            ? 'bg-amber-50/70 border-amber-500 ring-2 ring-amber-500/20'
-                            : 'bg-gray-50/50 border-gray-200 hover:border-gray-300'
-                        }`}
-                      >
-                        {tier.badge && (
-                          <span className="absolute -top-2 right-2 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-amber-500 text-white shadow-xs">
-                            {tier.badge}
-                          </span>
-                        )}
-
-                        <span className="text-base font-bold text-gray-900 block">
-                          {tier.votes} {tier.votes === 1 ? 'Vote' : 'Votes'}
-                        </span>
-                        
-                        <span className="text-xs font-semibold text-amber-700 block mt-0.5">
-                          GHS {tier.priceGhs.toFixed(2)}
-                        </span>
-
-                        {tier.originalPriceGhs && (
-                          <span className="text-[10px] text-gray-400 line-through block">
-                            GHS {tier.originalPriceGhs.toFixed(2)}
-                          </span>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Mobile Money Network Picker */}
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2.5">
-                  2. Select Mobile Money Network
-                </label>
-
-                <div className="grid grid-cols-3 gap-2.5">
-                  {(['MTN', 'Telecel', 'AT'] as MomoNetwork[]).map((network) => {
-                    const isSelected = momoNetwork === network;
-                    return (
-                      <button
-                        type="button"
-                        key={network}
-                        onClick={() => setMomoNetwork(network)}
-                        className={`p-3 rounded-xl border text-center transition-all ${
-                          isSelected
-                            ? 'bg-amber-50/70 border-amber-500 ring-2 ring-amber-500/20 text-gray-900 font-bold'
-                            : 'bg-gray-50/50 border-gray-200 text-gray-600 hover:border-gray-300 font-medium'
-                        }`}
-                      >
-                        <span className="text-xs block">
-                          {network === 'MTN' && 'MTN MoMo'}
-                          {network === 'Telecel' && 'Telecel Cash'}
-                          {network === 'AT' && 'AT Money'}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Voter Phone Input */}
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-                  3. Enter Mobile Money Phone Number
-                </label>
-                <div className="relative">
-                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs font-semibold text-gray-400">
-                    +233
-                  </span>
+                <div className="flex items-center gap-2">
                   <input
-                    type="tel"
-                    inputMode="numeric"
-                    required
-                    value={voterPhone}
-                    onChange={(e) => setVoterPhone(e.target.value)}
-                    placeholder="024 123 4567"
-                    className="w-full pl-14 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white transition-all font-mono"
+                    type="number"
+                    min="1"
+                    max="10000"
+                    value={customVoteCount}
+                    onChange={(e) => setCustomVoteCount(parseInt(e.target.value) || 0)}
+                    className="flex-1 px-3 py-1.5 rounded-lg bg-white border border-slate-300 text-slate-900 font-semibold text-sm focus:outline-none focus:border-rose-500"
+                    placeholder="e.g. 250"
                   />
+                  <div className="text-right px-2">
+                    <p className="text-xs font-semibold text-rose-600">
+                      = GHC {priceGhs.toFixed(2)}
+                    </p>
+                  </div>
                 </div>
               </div>
+            )}
 
-              {/* Marketing consent */}
-              {contest.collectVoterContacts && (
-                <label className="flex items-start gap-2.5 p-3 rounded-xl bg-gray-50 border border-gray-100 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={consentedMarketing}
-                    onChange={(e) => setConsentedMarketing(e.target.checked)}
-                    className="mt-0.5 rounded text-amber-500 focus:ring-amber-400"
-                  />
-                  <span className="text-xs text-gray-600 leading-snug">
-                    Send me voting updates, contest milestones, and results for {contest.organizerName}.
-                  </span>
-                </label>
-              )}
-
-              {/* Fee Breakdown & Total */}
-              <div className="p-4 rounded-2xl bg-gray-50 border border-gray-200 space-y-2 text-xs">
-                <div className="flex items-center justify-between text-gray-600">
-                  <span>Votes Package ({selectedTier.votes} votes)</span>
-                  <span className="font-semibold text-gray-900">GHS {priceGhs.toFixed(2)}</span>
-                </div>
-                <div className="flex items-center justify-between text-gray-500">
-                  <span>Standard MoMo Fee (1.95%)</span>
-                  <span>GHS {paystackFeeGhs.toFixed(2)}</span>
-                </div>
-                <div className="pt-2 border-t border-gray-200 flex items-center justify-between font-bold text-sm text-gray-900">
-                  <span>Total Amount</span>
-                  <span className="text-amber-600">GHS {totalChargedGhs.toFixed(2)}</span>
-                </div>
+            {/* Summary & Proceed */}
+            <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
+              <div>
+                <span className="text-[10px] text-slate-500 uppercase font-medium block">Total Bundle</span>
+                <span className="text-base font-bold text-slate-900 tabular-nums">
+                  GHC {priceGhs.toFixed(2)}
+                </span>
               </div>
 
               <button
-                type="submit"
-                className="w-full py-3.5 bg-amber-500 hover:bg-amber-600 text-white font-semibold rounded-xl text-sm transition-colors shadow-xs flex items-center justify-center gap-2"
+                onClick={handleGoToCheckout}
+                className="py-2 px-4 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-medium text-xs shadow-2xs transition-colors flex items-center gap-1.5 active:scale-98"
               >
-                Continue to Payment
-                <ArrowRight className="w-4 h-4" />
+                Continue to Payment <ArrowRight className="w-3.5 h-3.5" />
               </button>
-            </form>
-          ) : (
-            /* Payment Prompt Simulation Screen */
-            <div className="space-y-6 text-center py-2">
-              <div className="w-16 h-16 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center mx-auto animate-pulse">
-                <Smartphone className="w-8 h-8" />
-              </div>
+            </div>
+          </div>
+        )}
 
-              <div className="space-y-1">
-                <h3 className="text-lg font-bold text-gray-900">
-                  Authorize MoMo Payment
-                </h3>
-                <p className="text-xs text-gray-500 max-w-xs mx-auto">
-                  A payment prompt for <strong className="text-gray-900">GHS {totalChargedGhs.toFixed(2)}</strong> has been sent to your <strong className="text-gray-900">{momoNetwork}</strong> phone ({voterPhone}).
-                </p>
-              </div>
+        {/* STEP 2: VOTER VERIFICATION & MOMO */}
+        {step === 'checkout' && (
+          <form onSubmit={handleInitiatePayment} className="mt-4 space-y-3.5">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-semibold text-slate-900">
+                Step 2: Mobile Money &amp; Voter Verification
+              </label>
+              <button
+                type="button"
+                onClick={() => setStep('bundle')}
+                className="text-xs text-rose-600 hover:underline"
+              >
+                Change Bundle
+              </button>
+            </div>
 
-              {/* Ghanaian USSD Instructions */}
-              <div className="p-4 rounded-2xl bg-amber-50/70 border border-amber-200/80 text-left text-xs text-amber-950 space-y-2">
-                <p className="font-bold flex items-center gap-1.5">
-                  <Lock className="w-3.5 h-3.5" /> Mobile Money PIN Prompt:
-                </p>
-                <ol className="list-decimal list-inside space-y-1 text-[11px] text-amber-900">
-                  <li>Check your phone screen for the prompt or dial <strong>*170#</strong> (MTN) / <strong>*110#</strong> (Telecel) / <strong>*110#</strong> (AT).</li>
-                  <li>Enter your MoMo Secret PIN to authorize.</li>
-                  <li>Your votes will be registered instantly once approved.</li>
-                </ol>
-              </div>
-
-              <div className="space-y-3">
-                <button
-                  type="button"
-                  disabled={loading}
-                  onClick={handleSimulateMoMoApproval}
-                  className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl text-sm transition-colors shadow-xs flex items-center justify-center gap-2 disabled:opacity-50"
-                >
-                  {loading ? (
-                    <>
-                      <RefreshCw className="w-4 h-4 animate-spin" />
-                      Verifying Payment with Network...
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle2 className="w-4 h-4" />
-                      I have approved payment on my phone
-                    </>
-                  )}
-                </button>
-
-                <div className="pt-2 border-t border-gray-100 flex items-center justify-between">
+            {/* Network Selector */}
+            <div className="space-y-1">
+              <span className="text-[11px] text-slate-500">Select Provider / Network:</span>
+              <div className="grid grid-cols-3 gap-2">
+                {(['MTN', 'Telecel', 'AT'] as MomoNetwork[]).map((net) => (
                   <button
+                    key={net}
                     type="button"
-                    onClick={() => setStep('select')}
-                    className="text-xs text-gray-500 hover:text-gray-800 font-medium"
+                    onClick={() => setMomoNetwork(net)}
+                    className={`py-1.5 px-2.5 rounded-lg border text-xs font-medium transition-colors ${
+                      momoNetwork === net
+                        ? 'bg-rose-50 border-rose-600 text-rose-700'
+                        : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                    }`}
                   >
-                    Cancel or change package
+                    {net === 'MTN' ? 'MTN MoMo' : net === 'Telecel' ? 'Telecel Cash' : 'AT Money'}
                   </button>
-
-                  <a
-                    href="https://wa.me/233500000000?text=Hello%20SteezeVotes%20Support%2C%20I%20have%20an%20issue%20with%20my%20payment."
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-xs text-amber-600 font-semibold hover:underline flex items-center gap-1"
-                  >
-                    Need MoMo Help? Chat WhatsApp
-                  </a>
-                </div>
+                ))}
               </div>
             </div>
-          )}
 
-        </div>
+            {/* Voter Phone Input */}
+            <div className="space-y-1">
+              <label className="text-[11px] text-slate-600 block">
+                Ghanaian Mobile Number (for USSD approval prompt):
+              </label>
+              <div className="relative">
+                <input
+                  type="tel"
+                  required
+                  placeholder="024 123 4567"
+                  value={voterPhone}
+                  onChange={(e) => setVoterPhone(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg bg-slate-50 border border-slate-200 text-slate-900 font-mono text-xs sm:text-sm focus:outline-none focus:border-rose-500 focus:bg-white pl-9"
+                />
+                <Smartphone className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              </div>
+            </div>
+
+            {/* Price Breakdown */}
+            <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1 text-xs">
+              <div className="flex justify-between text-slate-500">
+                <span>{activeVotes} Verified Vote(s):</span>
+                <span className="text-slate-900 font-mono">GHC {priceGhs.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between text-slate-500">
+                <span>Standard Processor Fee (1.95%):</span>
+                <span className="text-slate-700 font-mono">GHC {paystackFeeGhs.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between pt-1 border-t border-slate-200 font-semibold">
+                <span className="text-slate-900">Total Deducted:</span>
+                <span className="text-rose-600 font-mono text-sm">GHC {totalChargedGhs.toFixed(2)}</span>
+              </div>
+            </div>
+
+            {/* Consent Checkbox */}
+            <label className="flex items-start gap-2 text-[11px] text-slate-500 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={consentedMarketing}
+                onChange={(e) => setConsentedMarketing(e.target.checked)}
+                className="mt-0.5 rounded border-slate-300 text-rose-600 focus:ring-0"
+              />
+              <span>Send me official digital receipt confirmation and contest winner results via SMS.</span>
+            </label>
+
+            {/* Action Buttons */}
+            <div className="pt-2 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setStep('bundle')}
+                className="py-2 px-3.5 rounded-lg bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 text-xs font-medium"
+              >
+                Back
+              </button>
+              <button
+                type="submit"
+                className="flex-1 py-2 px-4 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-medium text-xs shadow-2xs transition-colors flex items-center justify-center gap-1.5 active:scale-98"
+              >
+                <Lock className="w-3.5 h-3.5" /> Pay GHC {totalChargedGhs.toFixed(2)}
+              </button>
+            </div>
+          </form>
+        )}
+
+        {/* STEP 3: USSD PROMPT SIMULATION / INSTANT CONFIRMATION */}
+        {step === 'processing' && (
+          <div className="mt-4 space-y-3.5 text-center py-2">
+            <div className="w-12 h-12 rounded-xl bg-rose-50 border border-rose-200 text-rose-600 mx-auto flex items-center justify-center animate-pulse">
+              <Smartphone className="w-6 h-6" />
+            </div>
+
+            <div className="space-y-1">
+              <h4 className="text-sm font-semibold text-slate-900">
+                USSD Approval Prompt Sent
+              </h4>
+              <p className="text-xs text-slate-500 max-w-sm mx-auto leading-relaxed">
+                Check phone <strong className="text-slate-900 font-mono">{voterPhone}</strong> for an authorization prompt from{' '}
+                <strong className="text-rose-600">{momoNetwork} Mobile Money</strong>.
+              </p>
+            </div>
+
+            <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-left space-y-1.5 text-xs">
+              <div className="flex justify-between">
+                <span className="text-slate-500">Total Amount:</span>
+                <span className="text-slate-900 font-semibold font-mono">GHC {totalChargedGhs.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Recipient:</span>
+                <span className="text-slate-700">Rooted Steeze Studios / SteezeVotes</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Ballot Allocation:</span>
+                <span className="text-rose-600 font-semibold">{activeVotes} Votes for {nominee.stageName || nominee.name}</span>
+              </div>
+            </div>
+
+            <div className="space-y-2 pt-1">
+              <button
+                type="button"
+                disabled={loading}
+                onClick={handleSimulateMoMoApproval}
+                className="w-full py-2 px-4 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs transition-colors flex items-center justify-center gap-1.5 shadow-2xs active:scale-98 disabled:opacity-60"
+              >
+                {loading ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Verifying Mobile Money PIN...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="w-3.5 h-3.5" /> Simulate PIN Entered &amp; Confirm Vote
+                  </>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setStep('checkout')}
+                className="text-xs text-slate-500 hover:text-slate-900"
+              >
+                Cancel or try another number
+              </button>
+            </div>
+          </div>
+        )}
 
       </div>
     </div>

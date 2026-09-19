@@ -6,6 +6,7 @@ export type ContestType = 'free' | 'paid';
 
 export interface BundleTier {
   id: string;
+  contestId?: string;
   votes: number;
   priceGhs: number;
   originalPriceGhs?: number;
@@ -13,6 +14,7 @@ export interface BundleTier {
   badge?: string;
   popular?: boolean;
   label?: string;
+  createdAt?: string;
 }
 
 export interface Nominee {
@@ -22,20 +24,24 @@ export interface Nominee {
   stageName?: string;
   photoUrl: string;
   bio: string;
-  nomineeCode: string;
+  votingCode: string; // matches backend nominees.voting_code
+  nomineeCode?: string; // backward compat alias
+  category?: string; // backend nominees.category ('General', etc.)
+  status?: string; // backend nominees.status ('active', 'suspended', 'disqualified')
   voteCount: number;
   paidVoteCount: number;
   freeVoteCount: number;
+  totalAmountGhs?: number; // backend nominees.total_amount_ghs
   createdAt: string;
 }
 
-export type ContestStatus = 'pending_review' | 'active' | 'closed' | 'frozen' | 'disputed' | 'settled' | 'rejected';
+export type ContestStatus = 'draft' | 'pending_review' | 'active' | 'paused' | 'ended' | 'settled';
 
 export interface Contest {
   id: string;
-  slug: string;
+  slug?: string;
   organizerId: string;
-  organizerName: string;
+  organizerName?: string;
   title: string;
   description: string;
   category: string;
@@ -46,56 +52,101 @@ export interface Contest {
   endDate: string;
   contestType: ContestType;
   codePrefix?: string;
-  pricePerVote: number; // minimum 1.00 GHS for paid
+  pricePerVote: number | null; // NULL for free contests, >= 1.00 for paid
   bundleTiers: BundleTier[];
-  showPublicResults: boolean;
-  collectVoterContacts: boolean;
+  showPublic: boolean; // matches backend contests.show_public
+  showPublicResults?: boolean; // backward compat alias
+  collectVoterContacts?: boolean;
   status: ContestStatus;
   escrowReleased: boolean;
+  isLockedForAudit?: boolean;
+  payoutStatus?: PayoutStatus;
+  termsAndConditions?: string; // backend contests.terms_and_conditions
+  bannerOrder?: number; // backend contests.banner_order
+  featured?: boolean; // backend contests.featured
   disputeDeadline?: string;
   rejectionReason?: string;
   createdAt: string;
   updatedAt: string;
 }
 
+export type PayoutStatus = 'pending' | 'processing' | 'paid' | 'held';
+
+export interface PayoutRequest {
+  id: string;
+  contestId: string;
+  contestTitle?: string;
+  organizerId: string;
+  organizerName?: string;
+  momoNetwork: MomoNetwork;
+  momoNumber: string;
+  grossRevenueGhs: number;
+  rssFeeGhs: number;
+  netPayoutGhs: number;
+  status: PayoutStatus;
+  momoTransactionRef?: string;
+  requestedAt: string;
+  processedAt?: string;
+  adminNotes?: string;
+}
+
 export interface VoteRecord {
   id: string;
   contestId: string;
-  contestTitle: string;
+  contestTitle?: string;
   nomineeId: string;
-  nomineeName: string;
+  nomineeName?: string;
   voteType: 'free' | 'paid';
   voteCount: number;
-  voterPhoneHashed: string;
-  voterPhoneMasked: string;
+  voterPhoneHashed?: string;
+  voterPhoneMasked?: string;
   voterPhoneRaw?: string; // stored only if consented
-  consentedMarketing: boolean;
+  consentedMarketing?: boolean;
   receiptCode: string;
   transactionId?: string;
-  amountPaidGhs: number;
-  feeGhs: number;
+  amountPaidGhs?: number;
+  feeGhs?: number;
   momoNetwork?: MomoNetwork;
   createdAt: string;
   flaggedAnomaly?: boolean;
 }
 
+export type AuditLogRecord = VoteRecord;
+
+// Transaction for internal / admin operations
 export interface Transaction {
   id: string;
   reference: string;
   contestId: string;
   nomineeId: string;
-  nomineeName: string;
+  nomineeName?: string;
   voteCount: number;
   amountGhs: number;
-  feeGhs: number; // ~1.95%
+  feeGhs: number;
   totalChargedGhs: number;
-  organizerRevenueGhs: number; // 90%
-  rssCommissionGhs: number; // 10%
-  voterPhone: string;
+  organizerRevenueGhs: number;
+  rssCommissionGhs: number;
+  voterPhone?: string; // Protected PII - strictly excluded from organizer view
   momoNetwork: MomoNetwork;
   status: 'pending' | 'success' | 'failed';
   receiptCode: string;
+  paystackReference?: string;
   createdAt: string;
+}
+
+// Safe transaction representation queried from public.organizer_transactions_view (Excludes voter_phone)
+export interface OrganizerTransaction {
+  id: string;
+  contestId: string;
+  nomineeId: string;
+  nomineeName?: string;
+  voteCount: number;
+  amountGhs: number;
+  organizerRevenueGhs: number;
+  status: 'pending' | 'success' | 'failed';
+  createdAt: string;
+  reference?: string;
+  receiptCode?: string;
 }
 
 export interface OrganizerAccount {
@@ -112,23 +163,28 @@ export interface OrganizerAccount {
   createdAt: string;
 }
 
-export interface SystemSettings {
+export interface PlatformSettings {
   maxActiveContestsPerOrganizer: number;
   maintenanceMode: boolean;
+  defaultCommissionRate: number; // 0.10 (10%)
 }
 
-export interface AnomalyAlert {
+export type SystemSettings = PlatformSettings;
+
+export interface Anomaly {
   id: string;
   contestId: string;
-  contestTitle: string;
-  nomineeId: string;
-  nomineeName: string;
+  contestTitle?: string;
+  nomineeId?: string;
+  nomineeName?: string;
   reason: string;
   severity: 'low' | 'medium' | 'high';
   detectedAt: string;
   resolved: boolean;
   actionTaken?: string;
 }
+
+export type AnomalyAlert = Anomaly;
 
 export interface VoterContact {
   contestId: string;
@@ -137,3 +193,4 @@ export interface VoterContact {
   optedInAt: string;
   totalVotes: number;
 }
+

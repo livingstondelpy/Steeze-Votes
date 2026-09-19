@@ -1,29 +1,50 @@
 import React from 'react';
-import { X, Building2, Phone, Calendar, CheckCircle2, Award } from 'lucide-react';
+import { X, Building2, Calendar, CheckCircle2, Award, ExternalLink } from 'lucide-react';
 import { OrganizerAccount, Contest } from '../../types';
+import { store } from '../../lib/store';
 
 interface OrganizerProfileModalProps {
-  isOpen: boolean;
+  isOpen?: boolean;
   onClose: () => void;
-  organizer: OrganizerAccount | null;
-  contests: Contest[];
+  organizer?: OrganizerAccount | null;
+  contest?: Contest;
+  contests?: Contest[];
   onSelectContest?: (slug: string) => void;
 }
 
 export const OrganizerProfileModal: React.FC<OrganizerProfileModalProps> = ({
-  isOpen,
+  isOpen = true,
   onClose,
-  organizer,
-  contests,
+  organizer: propOrganizer,
+  contest,
+  contests: propContests,
   onSelectContest,
 }) => {
-  if (!isOpen || !organizer) return null;
+  if (isOpen === false) return null;
 
-  const orgContests = contests.filter((c) => c.organizerId === organizer.id && c.status === 'active');
+  const allContests = propContests || store.contests;
+  const organizer: OrganizerAccount | null = propOrganizer || (contest ? (store.organizers.find(o => o.id === contest.organizerId) || {
+    id: contest.organizerId || 'org-default',
+    organizationName: contest.organizerName || 'Verified Organizer',
+    email: 'contact@organizer.com',
+    contactPhone: '+233 24 000 0000',
+    momoNumber: '0240000000',
+    momoNetwork: 'MTN',
+    status: 'approved',
+    createdAt: '2025-01-01',
+    bio: 'Official event organizer hosting verified voting contests on SteezeVotes platform.'
+  }) : null);
+
+  if (!organizer) return null;
+
+  const orgContests = allContests.filter((c) => c.organizerId === organizer.id && c.status === 'active');
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs overflow-y-auto">
-      <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-gray-100 relative my-8">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto">
+      <div 
+        className="bg-white rounded-2xl max-w-lg w-full max-h-[90dvh] overflow-y-auto p-5 sm:p-6 shadow-2xl border border-gray-100 relative my-auto animate-in fade-in zoom-in-95 duration-150"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Close Button */}
         <button
           onClick={onClose}
@@ -34,7 +55,7 @@ export const OrganizerProfileModal: React.FC<OrganizerProfileModalProps> = ({
 
         {/* Header Profile Area */}
         <div className="flex flex-col items-center text-center space-y-3 pt-2 pb-4 border-b border-gray-100">
-          <div className="w-20 h-20 rounded-2xl bg-amber-50 border-2 border-amber-200 overflow-hidden flex items-center justify-center shadow-xs">
+          <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-amber-50 border-2 border-amber-200 overflow-hidden flex items-center justify-center shadow-xs">
             {organizer.profilePictureUrl ? (
               <img
                 src={organizer.profilePictureUrl}
@@ -42,7 +63,7 @@ export const OrganizerProfileModal: React.FC<OrganizerProfileModalProps> = ({
                 className="w-full h-full object-cover"
               />
             ) : (
-              <Building2 className="w-10 h-10 text-amber-600" />
+              <Building2 className="w-8 h-8 sm:w-10 sm:h-10 text-amber-600" />
             )}
           </div>
 
@@ -91,7 +112,7 @@ export const OrganizerProfileModal: React.FC<OrganizerProfileModalProps> = ({
                     <img
                       src={c.bannerUrl}
                       alt={c.title}
-                      className="w-10 h-10 rounded-lg object-cover bg-gray-200 shrink-0"
+                      className="w-10 aspect-[4/5] rounded-md object-cover bg-slate-200 shrink-0 border border-slate-200"
                     />
                     <div className="text-left">
                       <h4 className="text-xs font-bold text-gray-900 group-hover:text-amber-900 line-clamp-1">
@@ -111,7 +132,7 @@ export const OrganizerProfileModal: React.FC<OrganizerProfileModalProps> = ({
         <div className="mt-6 pt-3 text-center">
           <button
             onClick={onClose}
-            className="w-full py-2 text-xs font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors"
+            className="w-full py-2.5 text-xs font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors active:scale-98"
           >
             Close Profile
           </button>

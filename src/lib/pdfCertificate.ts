@@ -67,7 +67,7 @@ export function generateResultsCertificatePdf(contest: Contest, nominees: Nomine
   doc.setFontSize(9);
   doc.text(`Total Ballots Cast: ${totalVotes.toLocaleString()}`, 30, 103);
   doc.text(`Free OTP Votes: ${totalFreeVotes.toLocaleString()}`, 30, 109);
-  doc.text(`Paid MoMo Votes: ${totalPaidVotes.toLocaleString()}`, 110, 103);
+  doc.text(`Paid Votes: ${totalPaidVotes.toLocaleString()}`, 110, 103);
   doc.text(`Audit Status: 100% Verified & Escrow Reconciled`, 110, 109);
 
   // Winner Announcement Banner

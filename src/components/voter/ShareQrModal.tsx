@@ -28,9 +28,9 @@ export const ShareQrModal: React.FC<ShareQrModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto">
       <div 
-        className="bg-white border border-gray-200 rounded-3xl max-w-sm w-full p-6 text-gray-900 shadow-2xl relative text-center animate-in fade-in zoom-in-95 duration-150"
+        className="bg-white border border-gray-200 rounded-3xl max-w-sm w-full max-h-[90dvh] overflow-y-auto my-auto p-5 sm:p-6 text-gray-900 shadow-2xl relative text-center animate-in fade-in zoom-in-95 duration-150"
         onClick={(e) => e.stopPropagation()}
       >
         <button

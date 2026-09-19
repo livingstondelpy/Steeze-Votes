@@ -24,9 +24,9 @@ export const TrustBadgeModal: React.FC<TrustBadgeModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto">
       <div 
-        className="bg-white border border-gray-200 rounded-3xl max-w-xl w-full p-6 text-gray-900 shadow-2xl relative overflow-hidden animate-in fade-in zoom-in-95 duration-150"
+        className="bg-white border border-gray-200 rounded-3xl max-w-xl w-full max-h-[90dvh] overflow-y-auto my-auto p-5 sm:p-6 text-gray-900 shadow-2xl relative animate-in fade-in zoom-in-95 duration-150"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between pb-4 border-b border-gray-100">
@@ -66,7 +66,7 @@ export const TrustBadgeModal: React.FC<TrustBadgeModalProps> = ({
                 <span>1 Phone = 1 Free Vote</span>
               </div>
               <p className="text-xs text-gray-500 leading-relaxed">
-                Free votes require SMS OTP verification. We keep your phone number safe and prevent anyone from voting twice for free.
+                Free votes require SMS code verification. We keep your phone number safe and prevent anyone from voting twice for free.
               </p>
             </div>
 

@@ -12,9 +12,17 @@ import {
   TrendingUp, 
   Users,
   ChevronRight,
-  Flame
+  Flame,
+  Radio,
+  Lock,
+  Layers,
+  BarChart3
 } from 'lucide-react';
-import { Contest, Nominee } from '../../types';
+import { Contest, Nominee, VoteRecord, Transaction } from '../../types';
+import { FeaturedNomineesCarousel } from './FeaturedNomineesCarousel';
+import { PaidVoteModal } from './PaidVoteModal';
+import { FreeVoteModal } from './FreeVoteModal';
+import { ReceiptModal } from './ReceiptModal';
 
 interface HomePageProps {
   contests: Contest[];
@@ -22,6 +30,7 @@ interface HomePageProps {
   onSelectContest: (contestId: string) => void;
   onNavigate: (view: string, role?: 'voter' | 'organizer' | 'rss_admin') => void;
   onOpenTrustModal: () => void;
+  isDark?: boolean;
 }
 
 export const HomePage: React.FC<HomePageProps> = ({
@@ -30,19 +39,27 @@ export const HomePage: React.FC<HomePageProps> = ({
   onSelectContest,
   onNavigate,
   onOpenTrustModal,
+  isDark = true,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
 
+  // Quick voting from homepage carousel
+  const [selectedNomineeForPaid, setSelectedNomineeForPaid] = useState<Nominee | null>(null);
+  const [selectedNomineeForFree, setSelectedNomineeForFree] = useState<Nominee | null>(null);
+  const [activeContestForVote, setActiveContestForVote] = useState<Contest | null>(null);
+  const [activeReceipt, setActiveReceipt] = useState<VoteRecord | null>(null);
+  const [activeTx, setActiveTx] = useState<Transaction | null>(null);
+
   const categories = ['All', 'Music & Entertainment', 'Nightlife & Culture', 'Pageantry & Fashion'];
 
   const filteredContests = contests.filter((c) => {
-    // Only active or closed contests are visible to the public (pending contests remain hidden)
-    const isPublic = c.status === 'active' || c.status === 'closed';
+    const isPublic = c.status === 'active' || c.status === 'ended' || c.status === 'settled';
     const matchesCat = selectedCategory === 'All' || c.category === selectedCategory;
-    const matchesSearch = c.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          c.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          c.organizerName.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSearch = 
+      c.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      c.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      c.organizerName.toLowerCase().includes(searchQuery.toLowerCase());
     return isPublic && matchesCat && matchesSearch;
   });
 
@@ -56,6 +73,8 @@ export const HomePage: React.FC<HomePageProps> = ({
       .reduce((sum, n) => sum + n.voteCount, 0);
   };
 
+  const totalSystemVotes = nominees.reduce((sum, n) => sum + n.voteCount, 0);
+
   const formatDaysLeft = (endDateStr: string) => {
     const diff = new Date(endDateStr).getTime() - Date.now();
     if (diff <= 0) return 'Ended';
@@ -65,300 +84,304 @@ export const HomePage: React.FC<HomePageProps> = ({
     return `${hours}h left`;
   };
 
+  const handleCarouselVote = (nominee: Nominee, contest: Contest) => {
+    setActiveContestForVote(contest);
+    if (contest.contestType === 'free') {
+      setSelectedNomineeForFree(nominee);
+    } else {
+      setSelectedNomineeForPaid(nominee);
+    }
+  };
+
   return (
-    <div className="bg-white text-gray-900 min-h-screen">
+    <div className="min-h-screen bg-[#fafafa] text-slate-900 pb-24 sm:pb-28">
       
-      {/* Hero Section — Styled like eGotickets / Ayatickets */}
-      <section className="relative bg-gradient-to-b from-amber-50/50 via-white to-gray-50/40 border-b border-gray-100 pt-10 pb-16 lg:pt-16 lg:pb-24">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center max-w-3xl mx-auto space-y-5">
+      {/* MINIMALIST HERO SECTION */}
+      <section className="relative pt-8 sm:pt-12 pb-10 sm:pb-12 border-b border-slate-200/80 bg-white">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center space-y-4 max-w-2xl mx-auto">
             
-            {/* Small trust pill */}
-            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-100/80 border border-amber-200/70 text-amber-900 text-xs font-semibold">
-              <ShieldCheck className="w-3.5 h-3.5 text-amber-700" />
-              <span>Verified Mobile Money Voting for Ghana</span>
+            {/* Status Chip */}
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-100 border border-slate-200 text-slate-700 text-xs font-medium">
+              <span className="w-2 h-2 rounded-full bg-emerald-500" />
+              <span>Official Voting &amp; Awards Platform • Ghana</span>
             </div>
 
-            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-gray-900 leading-tight">
-              Vote for your favorite awards and pageants across Ghana
-            </h1>
+            {/* Reflective Glass Editorial Headline */}
+            <div className="relative overflow-hidden bg-gradient-to-b from-slate-900/95 via-black to-slate-950 p-6 sm:p-8 rounded-3xl border border-white/20 shadow-2xl backdrop-blur-xl">
+              {/* Glossy Glass Reflection Sheen */}
+              <div className="absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/15 to-transparent pointer-events-none rounded-t-3xl" />
+              <div className="absolute -inset-full w-[200%] h-[200%] bg-gradient-to-tr from-transparent via-white/10 to-transparent rotate-12 pointer-events-none" />
+              <div className="absolute inset-0 rounded-3xl ring-1 ring-inset ring-white/15 pointer-events-none" />
 
-            <p className="text-base sm:text-lg text-gray-600 max-w-2xl mx-auto leading-relaxed">
-              Support your nominees with 1 free verified vote or instant Mobile Money vote packages on MTN, Telecel, and AT.
+              <h1 className="relative z-10 text-3xl sm:text-4xl lg:text-5xl font-display font-bold tracking-tight text-white uppercase leading-tight">
+                GHANA&apos;S NO. 1 VOTING PLATFORM FOR <br className="hidden sm:inline" />
+                <span className="bg-gradient-to-r from-red-400 via-red-500 to-rose-600 bg-clip-text text-transparent inline-block drop-shadow-sm">
+                  CONTESTS &amp; AWARDS
+                </span>
+              </h1>
+            </div>
+
+            <p className="text-sm sm:text-base text-slate-600 leading-relaxed max-w-xl mx-auto">
+              Cast your vote securely using MTN Mobile Money, Telecel Cash, or AT Money. Every vote generates an instant cryptographic receipt for transparent verification.
             </p>
 
-            {/* Quick Action Button & Search */}
-            <div className="pt-3 max-w-xl mx-auto space-y-3">
-              <div className="flex flex-col sm:flex-row items-center gap-2.5">
-                <div className="relative w-full">
-                  <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search contests, awards, or organizers..."
-                    className="w-full pl-10 pr-4 py-3 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent shadow-xs placeholder:text-gray-400"
-                  />
-                </div>
+            {/* Search Input Bar */}
+            <div className="pt-2 max-w-lg mx-auto">
+              <div className="relative flex items-center">
+                <Search className="absolute left-3.5 w-4 h-4 text-slate-400" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search contest, nominee, or organizer..."
+                  className="w-full min-h-[44px] pl-10 pr-24 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-rose-500 focus:bg-white transition-all shadow-2xs"
+                />
                 <button
                   onClick={() => onNavigate('contests', 'voter')}
-                  className="w-full sm:w-auto px-6 py-3 bg-amber-500 hover:bg-amber-600 text-white font-semibold rounded-xl text-sm transition-colors shadow-sm flex items-center justify-center gap-2 whitespace-nowrap"
+                  className="min-h-[36px] absolute right-1.5 px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white font-medium text-xs rounded-lg transition-colors inline-flex items-center justify-center active:scale-98"
                 >
-                  Explore Contests
-                  <ArrowRight className="w-4 h-4" />
+                  Browse
                 </button>
               </div>
+            </div>
 
-              {/* Supported Networks */}
+            {/* Minimal Stat Strip */}
+            <div className="pt-6 grid grid-cols-3 gap-3 sm:gap-4 max-w-lg mx-auto border-t border-slate-100 text-center">
+              <div className="p-2 sm:p-0">
+                <span className="text-[11px] sm:text-xs text-slate-500 block">Total Votes</span>
+                <span className="text-base sm:text-lg font-bold text-slate-900 tabular-nums">{totalSystemVotes.toLocaleString()}</span>
+              </div>
+              <div className="p-2 sm:p-0">
+                <span className="text-[11px] sm:text-xs text-slate-500 block">Active Contests</span>
+                <span className="text-base sm:text-lg font-bold text-slate-900 tabular-nums">{contests.filter((c) => c.status === 'active').length}</span>
+              </div>
+              <div className="p-2 sm:p-0">
+                <span className="text-[11px] sm:text-xs text-slate-500 block">Audit Record</span>
+                <span className="text-base sm:text-lg font-bold text-emerald-600">Verified</span>
+              </div>
             </div>
 
           </div>
         </div>
       </section>
 
-      {/* Feature Highlights — Simple Pillars */}
-      <section className="py-12 bg-white border-b border-gray-100">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 max-w-3xl mx-auto">
-
-            <div className="p-5 rounded-2xl bg-gray-50/70 border border-gray-100 hover:border-gray-200 transition-all">
-              <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center mb-3.5">
-                <TrendingUp className="w-5 h-5" />
-              </div>
-              <h3 className="text-sm font-bold text-gray-900 mb-1">
-                Live Certified Results
-              </h3>
-              <p className="text-xs text-gray-600 leading-relaxed">
-                Watch standings update in real time with transparent tally records.
-              </p>
-            </div>
-
-            <div className="p-5 rounded-2xl bg-gray-50/70 border border-gray-100 hover:border-gray-200 transition-all">
-              <div className="w-10 h-10 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center mb-3.5">
-                <ShieldCheck className="w-5 h-5" />
-              </div>
-              <h3 className="text-sm font-bold text-gray-900 mb-1">
-                Official Digital Receipts
-              </h3>
-              <p className="text-xs text-gray-600 leading-relaxed">
-                Get verifiable receipt codes and QR proofs for every ballot cast.
-              </p>
-            </div>
-
-          </div>
-        </div>
+      {/* FEATURED FRONT-RUNNERS SECTION */}
+      <section className="py-10 border-b border-slate-200/80 bg-white">
+        <FeaturedNomineesCarousel
+          nominees={nominees}
+          contests={contests}
+          onVoteAction={handleCarouselVote}
+          onViewDetails={(nominee, contest) => onSelectContest(contest.id)}
+          isDark={false}
+        />
       </section>
 
-      {/* Featured / Live Contests Section — eGotickets style event cards */}
-      <section className="py-12 sm:py-16 bg-gray-50/50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      {/* CONTESTS DIRECTORY SECTION */}
+      <section className="py-10 sm:py-16">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6 sm:space-y-8">
           
-          {/* Section Header */}
-          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-8">
+          {/* Section Header & Minimal Category Filter */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-4">
             <div>
-              <div className="flex items-center gap-2 text-xs font-semibold text-amber-700 uppercase tracking-wider mb-1">
-                <Flame className="w-4 h-4 text-amber-600" />
-                <span>Now Trending</span>
-              </div>
-              <h2 className="text-2xl font-bold text-gray-900 tracking-tight">
-                Live Events & Awards Contests
+              <h2 className="text-xl sm:text-2xl font-display font-bold text-slate-900 tracking-tight">
+                Active Contests
               </h2>
+              <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
+                Select a category to view nominees and cast your ballot.
+              </p>
             </div>
 
-            {/* Category Pills */}
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
-              {categories.map((cat) => (
-                <button
-                  key={cat}
-                  onClick={() => setSelectedCategory(cat)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors ${
-                    selectedCategory === cat
-                      ? 'bg-amber-500 text-white shadow-xs'
-                      : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'
-                  }`}
-                >
-                  {cat}
-                </button>
-              ))}
+            {/* Category Filter Pills */}
+            <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar scroll-smooth flex-nowrap py-1">
+              {categories.map((cat) => {
+                const count = cat === 'All' 
+                  ? contests.filter((c) => c.status === 'active' || c.status === 'ended' || c.status === 'settled').length
+                  : contests.filter((c) => c.category === cat && (c.status === 'active' || c.status === 'ended' || c.status === 'settled')).length;
+                const isActive = selectedCategory === cat;
+
+                return (
+                  <button
+                    key={cat}
+                    onClick={() => setSelectedCategory(cat)}
+                    className={`min-h-[44px] px-3.5 py-2 rounded-xl text-xs font-medium whitespace-nowrap transition-colors inline-flex items-center justify-center gap-1.5 ${
+                      isActive
+                        ? 'bg-slate-900 text-white shadow-2xs'
+                        : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                    }`}
+                  >
+                    <span>{cat}</span>
+                    <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded-full ${isActive ? 'bg-slate-800 text-slate-200' : 'bg-slate-100 text-slate-500'}`}>
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
-          {/* Cards Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {/* Minimalist Contests Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6">
             {filteredContests.map((contest) => {
-              const totalVotes = getTotalVotes(contest.id);
-              const nomineeCount = getNomineeCount(contest.id);
-              const isClosed = contest.status === 'closed';
+              const count = getNomineeCount(contest.id);
+              const votes = getTotalVotes(contest.id);
+              const isClosed = contest.status === 'ended' || contest.status === 'settled';
 
               return (
                 <div
                   key={contest.id}
                   onClick={() => onSelectContest(contest.id)}
-                  className="group bg-white rounded-2xl border border-gray-200 overflow-hidden hover:border-amber-300 hover:shadow-md transition-all duration-200 cursor-pointer flex flex-col"
+                  className="group bg-white rounded-2xl border border-slate-200 overflow-hidden hover:border-slate-300 hover:shadow-md transition-all duration-200 flex flex-col justify-between cursor-pointer shadow-2xs"
                 >
-                  {/* Banner Image */}
-                  <div className="relative aspect-[16/9] w-full overflow-hidden bg-gray-100">
-                    <img
-                      src={contest.bannerUrl}
-                      alt={contest.title}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    />
-                    
-                    {/* Category Tag */}
-                    <div className="absolute top-3 left-3">
-                      <span className="px-2.5 py-1 rounded-md text-[11px] font-semibold bg-white/90 backdrop-blur-xs text-gray-800 shadow-xs">
-                        {contest.category}
-                      </span>
+                  <div>
+                    {/* Event Flyer / Poster */}
+                    <div className="relative aspect-[4/5] w-full overflow-hidden bg-slate-100">
+                      <img
+                        src={contest.bannerUrl}
+                        alt={contest.title}
+                        className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-102"
+                        loading="lazy"
+                      />
+                      <div className="absolute top-3 left-3 flex items-center gap-1.5">
+                        <span className="px-2.5 py-1 rounded-md text-[10px] font-semibold bg-white/95 text-slate-800 shadow-2xs border border-slate-100">
+                          {contest.category}
+                        </span>
+                      </div>
+                      <div className="absolute top-3 right-3">
+                        <span className={`px-2.5 py-1 rounded-md text-[10px] font-semibold shadow-2xs ${
+                          isClosed ? 'bg-slate-800 text-slate-200' : 'bg-emerald-600 text-white'
+                        }`}>
+                          {isClosed ? 'Closed' : formatDaysLeft(contest.endDate)}
+                        </span>
+                      </div>
                     </div>
 
-                    {/* Status / Time Left */}
-                    <div className="absolute top-3 right-3">
-                      <span className={`px-2.5 py-1 rounded-md text-[11px] font-semibold flex items-center gap-1 shadow-xs ${
-                        isClosed 
-                          ? 'bg-gray-900 text-white' 
-                          : 'bg-amber-500 text-white'
-                      }`}>
-                        <Clock className="w-3 h-3" />
-                        {formatDaysLeft(contest.endDate)}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Card Content */}
-                  <div className="p-5 flex-1 flex flex-col justify-between space-y-4">
-                    <div>
-                      <p className="text-xs text-gray-500 font-medium mb-1">
-                        By {contest.organizerName}
+                    {/* Content */}
+                    <div className="p-4 sm:p-5 space-y-2">
+                      <p className="text-[11px] font-medium text-rose-600">
+                        {contest.organizerName}
                       </p>
-                      <h3 className="text-base font-bold text-gray-900 group-hover:text-amber-600 transition-colors line-clamp-2 leading-snug">
+                      <h3 className="text-base font-display font-bold text-slate-900 leading-snug group-hover:text-rose-600 transition-colors line-clamp-1">
                         {contest.title}
                       </h3>
-                      <p className="text-xs text-gray-500 mt-2 line-clamp-2 leading-relaxed">
+                      <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">
                         {contest.description}
                       </p>
                     </div>
-
-                    {/* Stats & CTA */}
-                    <div className="pt-3 border-t border-gray-100 flex items-center justify-between">
-                      <div className="text-xs text-gray-600">
-                        <span className="font-bold text-gray-900">{totalVotes.toLocaleString()}</span> votes • {nomineeCount} nominees
-                      </div>
-
-                      <button className="px-4 py-2 bg-amber-500 group-hover:bg-amber-600 text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1">
-                        {isClosed ? 'View Results' : 'Vote Now'}
-                        <ChevronRight className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
                   </div>
 
+                  {/* Clean Footer Bar */}
+                  <div className="px-4 sm:px-5 py-3 border-t border-slate-100 bg-slate-50/70 flex items-center justify-between min-h-[48px]">
+                    <div className="text-xs text-slate-500">
+                      <span className="font-semibold text-slate-800">{votes.toLocaleString()}</span> votes • {count} contenders
+                    </div>
+                    <span className="text-xs font-semibold text-rose-600 group-hover:translate-x-0.5 transition-transform inline-flex items-center gap-0.5">
+                      Enter Ballot <ChevronRight className="w-4 h-4" />
+                    </span>
+                  </div>
                 </div>
               );
             })}
           </div>
 
-          {/* View All Contests Link */}
-          <div className="mt-10 text-center">
-            <button
-              onClick={() => onNavigate('contests', 'voter')}
-              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl border border-gray-300 bg-white hover:bg-gray-50 text-sm font-semibold text-gray-800 transition-colors shadow-xs"
-            >
-              View All Contests
-              <ArrowRight className="w-4 h-4" />
-            </button>
-          </div>
-
         </div>
       </section>
 
-      {/* How It Works — 3 Clean Steps */}
-      <section className="py-16 bg-white border-b border-gray-100">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center max-w-2xl mx-auto mb-12">
-            <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight mb-2">
-              How Voting Works on SteezeVotes
+      {/* TRUST & VERIFICATION SECTION - CLEAN MINIMAL */}
+      <section className="py-12 border-t border-slate-200/80 bg-white">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center max-w-xl mx-auto space-y-2 mb-8">
+            <h2 className="text-xl sm:text-2xl font-display font-bold text-slate-900">
+              Verified Voting Integrity
             </h2>
-            <p className="text-sm text-gray-600">
-              Simple, transparent, and verified on your phone.
+            <p className="text-xs sm:text-sm text-slate-500">
+              Our platform enforces bank-grade payment reconciliation and transparent cryptographic receipts.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            
-            <div className="text-center space-y-3 p-6 rounded-2xl bg-gray-50/50 border border-gray-100">
-              <div className="w-12 h-12 rounded-full bg-amber-500 text-white font-bold text-base flex items-center justify-center mx-auto shadow-xs">
-                1
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
+            <div className="p-5 sm:p-6 rounded-2xl border border-slate-200 bg-slate-50/50 space-y-2 shadow-2xs">
+              <div className="w-10 h-10 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center font-bold">
+                <Lock className="w-5 h-5" />
               </div>
-              <h3 className="text-base font-bold text-gray-900">
-                Choose Your Nominee
-              </h3>
-              <p className="text-xs text-gray-600 leading-relaxed">
-                Browse the contest list and find the nominee you want to support.
+              <h3 className="text-sm font-bold text-slate-900">Digital Audit Trail</h3>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                Each ballot generates a verifiable cryptographic transaction code and QR code for public confirmation.
               </p>
             </div>
 
-            <div className="text-center space-y-3 p-6 rounded-2xl bg-gray-50/50 border border-gray-100">
-              <div className="w-12 h-12 rounded-full bg-amber-500 text-white font-bold text-base flex items-center justify-center mx-auto shadow-xs">
-                2
+            <div className="p-5 sm:p-6 rounded-2xl border border-slate-200 bg-slate-50/50 space-y-2 shadow-2xs">
+              <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">
+                <Smartphone className="w-5 h-5" />
               </div>
-              <h3 className="text-base font-bold text-gray-900">
-                Vote Free or Buy a Bundle
-              </h3>
-              <p className="text-xs text-gray-600 leading-relaxed">
-                Cast 1 free vote with phone SMS OTP, or purchase discounted vote packages with MoMo.
+              <h3 className="text-sm font-bold text-slate-900">Official MoMo Gateways</h3>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                Direct integration with MTN Mobile Money, Telecel Cash, and AT Money with automated payment confirmation.
               </p>
             </div>
 
-            <div className="text-center space-y-3 p-6 rounded-2xl bg-gray-50/50 border border-gray-100">
-              <div className="w-12 h-12 rounded-full bg-amber-500 text-white font-bold text-base flex items-center justify-center mx-auto shadow-xs">
-                3
+            <div className="p-5 sm:p-6 rounded-2xl border border-slate-200 bg-slate-50/50 space-y-2 shadow-2xs">
+              <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center font-bold">
+                <ShieldCheck className="w-5 h-5" />
               </div>
-              <h3 className="text-base font-bold text-gray-900">
-                Get Your Digital Receipt
-              </h3>
-              <p className="text-xs text-gray-600 leading-relaxed">
-                Receive an instant verifiable receipt code with a QR badge and WhatsApp share link.
+              <h3 className="text-sm font-bold text-slate-900">Escrow &amp; Safe Payouts</h3>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                Contest revenue is safeguarded under strict supervisory oversight until polling conclusions are audited.
               </p>
             </div>
+          </div>
 
+          <div className="mt-8 text-center">
+            <button
+              onClick={onOpenTrustModal}
+              className="min-h-[44px] px-4 py-2 inline-flex items-center gap-1.5 text-xs font-semibold text-rose-600 hover:text-rose-700 transition-colors active:scale-98"
+            >
+              Learn about our anti-fraud &amp; verification standards <ArrowRight className="w-4 h-4" />
+            </button>
           </div>
         </div>
       </section>
 
-      {/* For Organizers Banner — eGotickets style */}
-      <section className="py-14 bg-gradient-to-r from-gray-900 to-zinc-900 text-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col lg:flex-row items-center justify-between gap-8">
-            <div className="space-y-3 max-w-2xl text-center lg:text-left">
-              <span className="px-3 py-1 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs font-semibold">
-                For Event Organizers
-              </span>
-              <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">
-                Host your awards, pageants, or talent contests on SteezeVotes
-              </h2>
-              <p className="text-sm text-gray-300 leading-relaxed">
-                Enjoy fast Mobile Money payouts, zero setup fees, real-time leaderboard displays, and exportable voter contacts.
-              </p>
-            </div>
+      {/* Quick Vote Modals from Carousel */}
+      {selectedNomineeForPaid && activeContestForVote && (
+        <PaidVoteModal
+          nominee={selectedNomineeForPaid}
+          contest={activeContestForVote}
+          onClose={() => setSelectedNomineeForPaid(null)}
+          onSuccess={(receipt, tx) => {
+            setActiveReceipt(receipt);
+            setActiveTx(tx);
+          }}
+          onOpenTrustModal={onOpenTrustModal}
+          isDark={isDark}
+        />
+      )}
 
-            <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
-              <button
-                onClick={() => onNavigate('organizer', 'organizer')}
-                className="w-full sm:w-auto px-6 py-3.5 bg-amber-500 hover:bg-amber-600 text-gray-950 font-bold rounded-xl text-sm transition-colors shadow-sm flex items-center justify-center gap-2 whitespace-nowrap"
-              >
-                Host a Contest Now
-                <ArrowRight className="w-4 h-4" />
-              </button>
-              
-              <button
-                onClick={() => onNavigate('how-it-works', 'voter')}
-                className="w-full sm:w-auto px-5 py-3.5 bg-white/10 hover:bg-white/15 text-white font-medium rounded-xl text-sm transition-colors border border-white/20"
-              >
-                Learn More
-              </button>
-            </div>
-          </div>
-        </div>
-      </section>
+      {selectedNomineeForFree && activeContestForVote && (
+        <FreeVoteModal
+          nominee={selectedNomineeForFree}
+          contest={activeContestForVote}
+          onClose={() => setSelectedNomineeForFree(null)}
+          onSuccess={(receipt) => {
+            setActiveReceipt(receipt);
+            setActiveTx(null);
+          }}
+          onOpenTrustModal={onOpenTrustModal}
+        />
+      )}
+
+      {activeReceipt && activeContestForVote && (
+        <ReceiptModal
+          receipt={activeReceipt}
+          transaction={activeTx || undefined}
+          contest={activeContestForVote}
+          onClose={() => {
+            setActiveReceipt(null);
+            setActiveTx(null);
+          }}
+          isDark={isDark}
+        />
+      )}
 
     </div>
   );

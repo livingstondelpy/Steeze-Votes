@@ -45,7 +45,7 @@ export const MyVotesLookup: React.FC<MyVotesLookupProps> = ({
   const totalVotesCast = results.reduce((sum, r) => sum + r.voteCount, 0);
 
   return (
-    <div className="bg-gray-50 text-gray-900 min-h-screen py-6 sm:py-10">
+    <div className="bg-gray-50 text-gray-900 min-h-screen py-6 sm:py-8 pb-28 sm:pb-32">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
         
         {/* Navigation Breadcrumb */}

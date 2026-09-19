@@ -16,7 +16,9 @@ import {
   Info,
   ExternalLink,
   Award,
-  BarChart2
+  BarChart2,
+  Tag,
+  Building2
 } from 'lucide-react';
 import { Contest, Nominee, VoteRecord, Transaction } from '../../types';
 import { Breadcrumb } from '../Breadcrumb';
@@ -26,6 +28,7 @@ import { PaidVoteModal } from './PaidVoteModal';
 import { ReceiptModal } from './ReceiptModal';
 import { ShareQrModal } from './ShareQrModal';
 import { OrganizerProfileModal } from './OrganizerProfileModal';
+import { LeaderboardView } from './LeaderboardView';
 import { store } from '../../lib/store';
 
 interface ContestLandingProps {
@@ -35,8 +38,10 @@ interface ContestLandingProps {
   onOpenTrustModal: () => void;
   onViewMyVotes: () => void;
   onViewExplainer: () => void;
+  onViewLiveResults?: () => void;
   onBackToContests: () => void;
   onBackToHome?: () => void;
+  isDark?: boolean;
 }
 
 export const ContestLanding: React.FC<ContestLandingProps> = ({
@@ -46,34 +51,28 @@ export const ContestLanding: React.FC<ContestLandingProps> = ({
   onOpenTrustModal,
   onViewMyVotes,
   onViewExplainer,
+  onViewLiveResults,
   onBackToContests,
   onBackToHome,
+  isDark = true,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedSubCategory, setSelectedSubCategory] = useState<string>('All');
   const [selectedNomineeForFree, setSelectedNomineeForFree] = useState<Nominee | null>(null);
   const [selectedNomineeForPaid, setSelectedNomineeForPaid] = useState<Nominee | null>(null);
   const [activeReceipt, setActiveReceipt] = useState<VoteRecord | null>(null);
   const [activeTx, setActiveTx] = useState<Transaction | null>(null);
   const [showShareModal, setShowShareModal] = useState(false);
   const [showOrganizerModal, setShowOrganizerModal] = useState(false);
+  const [activeTab, setActiveTab] = useState<'ballot' | 'leaderboard'>('ballot');
   const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0, expired: false });
   const [socialProof, setSocialProof] = useState(store.socialProofCount);
-  const [pollTick, setPollTick] = useState(0);
 
-  // Sync social proof & periodic 12s polling tick for live standings
   useEffect(() => {
     const unsub = store.subscribe(() => {
       setSocialProof(store.socialProofCount);
     });
-
-    const pollInterval = setInterval(() => {
-      setPollTick((t) => t + 1);
-    }, 12000);
-
-    return () => {
-      unsub();
-      clearInterval(pollInterval);
-    };
+    return unsub;
   }, []);
 
   // Countdown timer
@@ -102,17 +101,19 @@ export const ContestLanding: React.FC<ContestLandingProps> = ({
 
   const totalVotes = contestNominees.reduce((sum, n) => sum + n.voteCount, 0);
 
-  // Top 5 nominees for Live Leaderboard
-  const top5Nominees = contestNominees.slice(0, 5);
+  // Extract unique sub-categories
+  const subCategories = ['All', ...Array.from(new Set(contestNominees.map((n) => n.category).filter(Boolean)))];
 
   const filteredNominees = contestNominees.filter((n) => {
     const term = searchTerm.toLowerCase();
-    return (
+    const matchesSearch = 
       n.name.toLowerCase().includes(term) ||
       (n.stageName && n.stageName.toLowerCase().includes(term)) ||
-      n.nomineeCode.toLowerCase().includes(term) ||
-      n.bio.toLowerCase().includes(term)
-    );
+      (n.votingCode && n.votingCode.toLowerCase().includes(term)) ||
+      (n.nomineeCode && n.nomineeCode.toLowerCase().includes(term)) ||
+      (n.bio && n.bio.toLowerCase().includes(term));
+    const matchesCategory = selectedSubCategory === 'All' || n.category === selectedSubCategory;
+    return matchesSearch && matchesCategory;
   });
 
   const handleFreeSuccess = (receipt: VoteRecord) => {
@@ -134,284 +135,293 @@ export const ContestLanding: React.FC<ContestLandingProps> = ({
   };
 
   return (
-    <div className="bg-gray-50 min-h-screen text-gray-900 pb-16">
-      
-      {/* Contest Header Card Container */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6">
+    <div className="min-h-screen pb-28 sm:pb-32 bg-[#fafafa] text-slate-900">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4 sm:pt-6 relative z-10 space-y-6">
         
-        {/* Navigation Breadcrumb & Actions */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+        {/* Navigation Breadcrumb & Share Trigger */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <Breadcrumb
             items={[
               { label: 'Home', onClick: onBackToHome || onBackToContests },
-              { label: 'Live Contests', onClick: onBackToContests },
+              { label: 'Categories & Contests', onClick: onBackToContests },
               { label: contest.title },
             ]}
           />
 
-          <div className="flex items-center gap-2 self-start sm:self-auto">
+          <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+            {onViewLiveResults && (
+              <button
+                onClick={onViewLiveResults}
+                className="min-h-[44px] inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-900 bg-slate-900 text-xs font-semibold text-white hover:bg-slate-800 transition-colors shadow-2xs active:scale-98"
+              >
+                <Trophy className="w-3.5 h-3.5 text-amber-400" />
+                <span>Live Results Display</span>
+              </button>
+            )}
+            <button
+              onClick={onOpenTrustModal}
+              className="min-h-[44px] inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors shadow-2xs active:scale-98"
+            >
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Audit Ledger</span>
+            </button>
             <button
               onClick={() => setShowShareModal(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-gray-200 text-xs font-semibold text-gray-700 hover:bg-gray-900 hover:text-white shadow-xs transition-colors"
+              className="min-h-[44px] inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors shadow-2xs active:scale-98"
             >
-              <Share2 className="w-3.5 h-3.5 text-amber-500" /> Share Contest
+              <Share2 className="w-3.5 h-3.5 text-rose-600" /> Share
             </button>
           </div>
         </div>
 
-        {/* Main Contest Hero Banner Card */}
-        <div className="bg-white rounded-3xl border border-gray-200 overflow-hidden shadow-xs">
-          
-          {/* Banner Graphic (if not in low data mode) */}
-          {!lowDataMode && (
-            <div className="relative w-full overflow-hidden bg-gray-950 flex items-center justify-center min-h-[240px] max-h-[460px]">
-              <div 
-                className="absolute inset-0 bg-cover bg-center opacity-30 blur-xl"
-                style={{ backgroundImage: `url(${contest.bannerUrl})` }}
-              />
-              <img
-                src={contest.bannerUrl}
-                alt={contest.title}
-                className="relative z-10 max-h-[440px] w-full object-contain"
-              />
-              <div className="absolute inset-0 z-20 bg-gradient-to-t from-black/85 via-black/25 to-transparent pointer-events-none" />
-              
-              <div className="absolute bottom-4 left-4 sm:bottom-6 sm:left-6 z-30 text-white max-w-2xl">
-                <div className="flex flex-wrap items-center gap-2 mb-2">
-                  <span className="inline-block px-2.5 py-1 rounded-md text-[11px] font-bold bg-amber-500 text-white shadow-xs">
+        {/* Contest Showcase & Telemetry Card */}
+        <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-2xs p-5 sm:p-7">
+          <div className="flex flex-col md:flex-row gap-6 lg:gap-8 items-start">
+            {/* 4:5 Portrait Event Flyer */}
+            {!lowDataMode && (
+              <div className="w-full sm:w-72 md:w-80 lg:w-84 aspect-[4/5] mx-auto md:mx-0 rounded-2xl overflow-hidden bg-slate-100 border border-slate-200 shrink-0 relative shadow-2xs group">
+                <img
+                  src={contest.bannerUrl}
+                  alt={contest.title}
+                  className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-102"
+                />
+                
+                {/* Floating Category & Format Badges */}
+                <div className="absolute top-3 left-3 flex flex-wrap items-center gap-1.5 z-10 pointer-events-none">
+                  <span className="px-2.5 py-1 rounded-md text-[11px] font-semibold bg-white/95 text-slate-900 shadow-2xs border border-slate-100">
                     {contest.category}
                   </span>
-                  <span className={`inline-block px-2.5 py-1 rounded-md text-[11px] font-bold uppercase ${
-                    contest.contestType === 'free' ? 'bg-emerald-600 text-white' : 'bg-amber-600 text-white'
+                  <span className={`px-2.5 py-1 rounded-md text-[11px] font-semibold shadow-2xs ${
+                    contest.contestType === 'free' ? 'bg-emerald-600 text-white' : 'bg-slate-900 text-white'
                   }`}>
-                    {contest.contestType === 'free' ? 'Free Contest' : 'Paid Voting Contest'}
+                    {contest.contestType === 'free' ? 'Free Phone Ballot' : 'Paid Voting'}
                   </span>
                 </div>
-                
-                <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold tracking-tight text-white leading-tight">
-                  {contest.title}
-                </h1>
-                
-                <button
-                  onClick={() => setShowOrganizerModal(true)}
-                  className="text-xs sm:text-sm text-amber-300 hover:text-amber-200 mt-1 font-semibold underline flex items-center gap-1 transition-colors"
-                >
-                  Organized by {contest.organizerName} (View Profile)
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Details & Stats Bar */}
-          <div className="p-6 sm:p-8 space-y-6">
-            {lowDataMode && (
-              <div>
-                <span className="inline-block px-2.5 py-1 rounded-md text-[11px] font-bold bg-amber-100 text-amber-800 mb-2">
-                  {contest.category} • {contest.contestType === 'free' ? 'Free Contest' : 'Paid Voting'}
-                </span>
-                <h1 className="text-2xl font-bold tracking-tight text-gray-900">
-                  {contest.title}
-                </h1>
-                <button
-                  onClick={() => setShowOrganizerModal(true)}
-                  className="text-xs text-amber-600 font-semibold hover:underline mt-1 block"
-                >
-                  Organized by {contest.organizerName} (View Profile)
-                </button>
               </div>
             )}
 
-            <p className="text-sm text-gray-600 leading-relaxed max-w-3xl">
-              {contest.description}
-            </p>
-
-            {/* Quick Metrics Bar */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 p-4 rounded-2xl bg-gray-50 border border-gray-100">
-              <div>
-                <span className="text-[11px] font-medium text-gray-500 uppercase tracking-wider block">
-                  Total Votes Cast
-                </span>
-                <span className="text-lg font-bold text-gray-900 mt-0.5 block">
-                  {totalVotes.toLocaleString()}
-                </span>
-              </div>
-
-              <div>
-                <span className="text-[11px] font-medium text-gray-500 uppercase tracking-wider block">
-                  Contestants
-                </span>
-                <span className="text-lg font-bold text-gray-900 mt-0.5 block">
-                  {contestNominees.length}
-                </span>
-              </div>
-
-              <div>
-                <span className="text-[11px] font-medium text-gray-500 uppercase tracking-wider block">
-                  Time Remaining
-                </span>
-                <span className="text-sm sm:text-base font-bold text-amber-700 mt-0.5 flex items-center gap-1">
-                  <Clock className="w-4 h-4 text-amber-600" />
-                  {timeLeft.expired ? 'Voting Ended' : `${timeLeft.days}d ${timeLeft.hours}h ${timeLeft.minutes}m`}
-                </span>
-              </div>
-
-              <div>
-                <span className="text-[11px] font-medium text-gray-500 uppercase tracking-wider block">
-                  Live Voting Activity
-                </span>
-                <span className="text-xs font-semibold text-emerald-700 mt-1 flex items-center gap-1">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
-                  {socialProof} votes recorded
-                </span>
-              </div>
-            </div>
-
-            {/* Sponsor Badge if present */}
-            {contest.sponsorName && (
-              <div className="flex items-center gap-2 text-xs text-gray-500 pt-1">
-                <span>Official Partner:</span>
-                <span className="font-semibold text-gray-800">{contest.sponsorName}</span>
-              </div>
-            )}
-
-          </div>
-
-        </div>
-
-        {/* Live Leaderboard Card (TOP OF CONTEST PAGE - REQUIREMENT #4) */}
-        {contest.showPublicResults && (
-          <div className="mt-8 bg-white rounded-3xl border border-amber-200/80 p-6 shadow-xs space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-gray-100">
-              <div className="flex items-center gap-2">
-                <div className="p-2 rounded-xl bg-amber-100 text-amber-700">
-                  <Trophy className="w-5 h-5" />
+            {/* Event Details & Telemetry */}
+            <div className="flex-1 space-y-5 w-full">
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    onClick={() => setShowOrganizerModal(true)}
+                    className="min-h-[36px] text-xs font-semibold text-rose-600 hover:text-rose-700 hover:underline inline-flex items-center gap-1.5 transition-colors"
+                  >
+                    <Building2 className="w-3.5 h-3.5" />
+                    <span>Organized by {contest.organizerName}</span>
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                  </button>
                 </div>
+
+                <h1 className="text-2xl sm:text-3xl font-display font-bold text-slate-900 leading-tight">
+                  {contest.title}
+                </h1>
+
+                <p className="text-xs sm:text-sm text-slate-600 leading-relaxed max-w-3xl">
+                  {contest.description}
+                </p>
+              </div>
+
+              {/* Quick Metrics Bar */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 rounded-xl bg-slate-50 border border-slate-200">
                 <div>
-                  <h3 className="text-base font-bold text-gray-900 flex items-center gap-2">
-                    Live Leaderboard (Top 5 Standing)
-                    <span className="text-[10px] font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                      Live Polling
-                    </span>
-                  </h3>
-                  <p className="text-xs text-gray-500">Updates automatically every 10-15 seconds.</p>
+                  <span className="text-[11px] text-slate-500 block">
+                    Total Votes Recorded
+                  </span>
+                  <span className="text-base sm:text-lg font-bold text-slate-900 tabular-nums mt-0.5 block">
+                    {totalVotes.toLocaleString()}
+                  </span>
+                </div>
+
+                <div>
+                  <span className="text-[11px] text-slate-500 block">
+                    Candidates
+                  </span>
+                  <span className="text-base sm:text-lg font-bold text-slate-900 tabular-nums mt-0.5 block">
+                    {contestNominees.length} Contenders
+                  </span>
+                </div>
+
+                <div>
+                  <span className="text-[11px] text-slate-500 block">
+                    Voting Countdown
+                  </span>
+                  <span className="text-xs sm:text-sm font-semibold text-amber-700 mt-0.5 flex items-center gap-1 tabular-nums">
+                    <Clock className="w-3.5 h-3.5" />
+                    {timeLeft.expired ? 'Voting Ended' : `${timeLeft.days}d ${timeLeft.hours}h ${timeLeft.minutes}m`}
+                  </span>
+                </div>
+
+                <div>
+                  <span className="text-[11px] text-slate-500 block">
+                    Audit Status
+                  </span>
+                  <span className="text-xs sm:text-sm font-medium text-emerald-700 mt-0.5 flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                    {socialProof} ballots verified
+                  </span>
                 </div>
               </div>
             </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
-              {top5Nominees.map((nom, idx) => {
-                const pct = totalVotes > 0 ? Math.round((nom.voteCount / totalVotes) * 100) : 0;
-                return (
-                  <div key={nom.id} className="p-3 rounded-2xl bg-gray-50 border border-gray-100 flex flex-col justify-between space-y-2">
-                    <div className="flex items-center gap-2">
-                      <span className={`w-6 h-6 rounded-lg text-xs font-bold flex items-center justify-center shrink-0 ${
-                        idx === 0 ? 'bg-amber-500 text-white' : 'bg-gray-200 text-gray-700'
-                      }`}>
-                        #{idx + 1}
-                      </span>
-                      <img
-                        src={nom.photoUrl}
-                        alt={nom.name}
-                        className="w-8 h-8 rounded-lg object-cover border border-gray-200 shrink-0"
-                      />
-                      <div className="min-w-0 flex-1">
-                        <p className="text-xs font-bold text-gray-900 truncate">
-                          {nom.stageName || nom.name}
-                        </p>
-                        <p className="text-[10px] text-gray-500 font-mono">
-                          {nom.nomineeCode}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="pt-1 border-t border-gray-200/60 flex items-center justify-between text-xs">
-                      <span className="font-bold text-gray-900">{nom.voteCount.toLocaleString()} votes</span>
-                      <span className="font-semibold text-amber-700">{pct}%</span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* Nominee Directory Search & Header */}
-        <div className="mt-10 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h2 className="text-xl font-bold text-gray-900 tracking-tight">
-              All Nominees
-            </h2>
-            <p className="text-xs text-gray-500 mt-0.5">
-              {contest.contestType === 'free' 
-                ? 'Select a contestant to cast your 1 free vote.' 
-                : 'Select a contestant to buy vote packages via Mobile Money.'}
-            </p>
-          </div>
-
-          <div className="relative w-full sm:w-72">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search contestant or code..."
-              className="w-full pl-10 pr-4 py-2 bg-white border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-xs"
-            />
           </div>
         </div>
 
-        {/* Nominees Grid */}
-        {filteredNominees.length === 0 ? (
-          <div className="text-center py-16 bg-white rounded-2xl border border-gray-200 p-8 space-y-3">
-            <p className="text-sm font-semibold text-gray-700">No contestant found</p>
-            <p className="text-xs text-gray-500">Try searching with a different name or contestant code.</p>
+        {/* View Tabs: Nominee Ballot vs. Live Standings Table */}
+        <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+          <div className="flex flex-wrap items-center gap-2">
             <button
-              onClick={() => setSearchTerm('')}
-              className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-800 text-xs font-semibold rounded-lg"
+              onClick={() => setActiveTab('ballot')}
+              className={`min-h-[44px] px-4 py-2 rounded-xl font-semibold text-xs transition-colors inline-flex items-center justify-center ${
+                activeTab === 'ballot'
+                  ? 'bg-slate-900 text-white shadow-2xs'
+                  : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+              }`}
             >
-              Show All Contestants
+              Candidate Ballot ({contestNominees.length})
             </button>
+
+            {contest.showPublicResults && (
+              <button
+                onClick={() => setActiveTab('leaderboard')}
+                className={`min-h-[44px] px-4 py-2 rounded-xl font-semibold text-xs transition-colors inline-flex items-center justify-center gap-1.5 ${
+                  activeTab === 'leaderboard'
+                    ? 'bg-slate-900 text-white shadow-2xs'
+                    : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                }`}
+              >
+                <Trophy className="w-3.5 h-3.5 text-amber-500" />
+                Live Standings
+              </button>
+            )}
           </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {filteredNominees.map((nominee, idx) => (
-              <NomineeCard
-                key={nominee.id}
-                nominee={nominee}
-                rank={idx + 1}
-                totalContestVotes={totalVotes}
-                contest={contest}
-                lowDataMode={lowDataMode}
-                onVoteFree={handleVoteAction}
-                onVotePaid={handleVoteAction}
-              />
-            ))}
+
+          <button
+            onClick={onOpenTrustModal}
+            className="min-h-[44px] hidden sm:inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-800"
+          >
+            <ShieldCheck className="w-4 h-4 text-emerald-600" />
+            <span>Anti-Fraud Ledger</span>
+          </button>
+        </div>
+
+        {/* TAB 1: CANDIDATE BALLOT */}
+        {activeTab === 'ballot' && (
+          <div className="space-y-6">
+            
+            {/* Search & Sub-Category Selector */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              {/* Category Pills */}
+              {subCategories.length > 2 && (
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 no-scrollbar">
+                  {subCategories.map((subCat) => (
+                    <button
+                      key={subCat}
+                      onClick={() => setSelectedSubCategory(subCat)}
+                      className={`min-h-[44px] px-3.5 py-2 rounded-xl text-xs font-medium whitespace-nowrap transition-colors inline-flex items-center justify-center ${
+                        selectedSubCategory === subCat
+                          ? 'bg-slate-900 text-white'
+                          : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                      }`}
+                    >
+                      {subCat}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Search Box */}
+              <div className="relative w-full sm:w-80 ml-auto">
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="Search candidate name or code..."
+                  className="w-full min-h-[44px] pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-rose-500 shadow-2xs"
+                />
+              </div>
+            </div>
+
+            {/* 7. RESPONSIVE NOMINEE GRID: 2 cols on mobile, 3 on tablet, 4 on desktop */}
+            {filteredNominees.length === 0 ? (
+              <div className="text-center py-16 bg-white rounded-2xl border border-slate-200 p-8 space-y-3">
+                <p className="text-sm font-semibold text-slate-700">No candidates match your filter</p>
+                <p className="text-xs text-slate-500">Try searching with a different candidate name or code.</p>
+                <button
+                  onClick={() => { setSearchTerm(''); setSelectedSubCategory('All'); }}
+                  className="min-h-[44px] px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-xl transition-colors inline-flex items-center justify-center"
+                >
+                  Reset Filter
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-5">
+                {filteredNominees.map((nominee, idx) => (
+                  <NomineeCard
+                    key={nominee.id}
+                    nominee={nominee}
+                    rank={idx + 1}
+                    totalContestVotes={totalVotes}
+                    contest={contest}
+                    lowDataMode={lowDataMode}
+                    onVoteFree={handleVoteAction}
+                    onVotePaid={handleVoteAction}
+                    isDark={false}
+                  />
+                ))}
+              </div>
+            )}
+
           </div>
         )}
 
-        {/* Subtle Trust Bar at Bottom */}
-        <div className="mt-12 p-4 rounded-2xl bg-white border border-gray-200 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-gray-600">
+        {/* TAB 2: LIVE LEADERBOARD (TABLE & GRID MODES) */}
+        {activeTab === 'leaderboard' && (
+          <LeaderboardView
+            nominees={contestNominees}
+            contest={contest}
+            totalVotes={totalVotes}
+            onVoteAction={handleVoteAction}
+            isDark={isDark}
+          />
+        )}
+
+        {/* Contest Terms & Conditions (if defined by organizer) */}
+        {contest.termsAndConditions && (
+          <div className="p-4 sm:p-5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-2">
+            <div className="flex items-center gap-2 text-slate-900 font-semibold text-xs uppercase tracking-wide">
+              <Info className="w-4 h-4 text-slate-500" />
+              <span>Contest Rules & Terms</span>
+            </div>
+            <p className="text-xs text-slate-600 leading-relaxed whitespace-pre-line">
+              {contest.termsAndConditions}
+            </p>
+          </div>
+        )}
+
+        {/* Bottom Trust Seal */}
+        <div className="p-4 rounded-xl bg-white border border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500 shadow-2xs">
           <div className="flex items-center gap-2.5">
             <ShieldCheck className="w-5 h-5 text-emerald-600 shrink-0" />
             <span>
-              All votes on SteezeVotes are secured by Ghana phone number verification and our 24-hour safe payout hold.
+              All votes on SteezeVotes are secured by Ghanaian phone verification, instant USSD confirmation, and SHA-256 digital audit hashes.
             </span>
           </div>
 
           <div className="flex items-center gap-3 whitespace-nowrap">
             <button
               onClick={onOpenTrustModal}
-              className="text-amber-600 hover:text-amber-700 font-semibold"
+              className="text-rose-600 hover:underline font-semibold"
             >
-              How it protects your vote
+              Integrity Whitepaper
             </button>
             <span>•</span>
             <button
               onClick={onViewMyVotes}
-              className="text-gray-700 hover:text-gray-900 font-semibold"
+              className="text-slate-900 hover:underline font-semibold"
             >
-              Look up my receipts
+              Verify My Ballot
             </button>
           </div>
         </div>
@@ -437,16 +447,18 @@ export const ContestLanding: React.FC<ContestLandingProps> = ({
           onClose={() => setSelectedNomineeForPaid(null)}
           onSuccess={handlePaidSuccess}
           onOpenTrustModal={onOpenTrustModal}
+          isDark={isDark}
         />
       )}
 
-      {/* Receipt Modal with Share Prompt (REQUIREMENT #22) */}
+      {/* Digital Receipt Modal */}
       {activeReceipt && (
         <ReceiptModal
           receipt={activeReceipt}
           transaction={activeTx || undefined}
           contest={contest}
           onClose={() => { setActiveReceipt(null); setActiveTx(null); }}
+          isDark={isDark}
         />
       )}
 

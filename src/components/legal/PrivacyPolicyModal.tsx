@@ -52,10 +52,10 @@ export const PrivacyPolicyModal: React.FC<PrivacyPolicyModalProps> = ({ isOpen =
           <div>
             <h3 className="font-bold text-gray-900 text-sm mb-1 uppercase tracking-wider">HOW WE USE YOUR INFORMATION</h3>
             <ul className="list-disc pl-5 space-y-1">
-              <li>To verify your free vote with a one-time code (OTP)</li>
+              <li>To verify your 1 Free Vote with an SMS verification code</li>
               <li>To send you a receipt confirming your paid vote</li>
               <li>To let you look up your own voting history using your phone number</li>
-              <li>If you choose to opt in, an event organizer may use your number to contact you about future events. This is always optional and only happens if you say yes.</li>
+              <li>Event organizers never receive your phone number. It is kept completely private by Rooted Steeze Studios.</li>
             </ul>
           </div>
 

@@ -49,63 +49,64 @@ export const SignInModal: React.FC<SignInModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
       <div 
-        className="bg-white rounded-2xl border border-gray-200 shadow-xl max-w-md w-full overflow-hidden text-gray-900 animate-in fade-in zoom-in-95 duration-150"
+        className="bg-white rounded-2xl border border-slate-200 shadow-xl max-w-md w-full max-h-[90dvh] overflow-y-auto my-auto text-slate-900 animate-in fade-in zoom-in-95 duration-150"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Header */}
-        <div className="flex items-center justify-between p-5 border-b border-gray-100">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center font-bold text-sm">
+        <div className="flex items-center justify-between p-5 border-b border-slate-100">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center font-bold text-sm">
               <Lock className="w-4 h-4" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-gray-900">Sign In to SteezeVotes</h2>
-              <p className="text-xs text-gray-500">Access your voting history or manage your contest</p>
+              <h2 className="text-base font-bold text-slate-900">Sign In to SteezeVotes</h2>
+              <p className="text-xs text-slate-500">Access your voting history or manage your contest</p>
             </div>
           </div>
 
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+            aria-label="Close sign in dialog"
+            className="min-h-[44px] min-w-[44px] rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors flex items-center justify-center active:scale-98"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Tab Toggle */}
-        <div className="p-2 bg-gray-50 border-b border-gray-100 flex gap-1 text-xs font-semibold">
+        <div className="p-2 bg-slate-50 border-b border-slate-100 flex gap-1.5 text-xs font-semibold">
           <button
             onClick={() => setTab('voter')}
-            className={`flex-1 py-2 rounded-lg transition-colors flex items-center justify-center gap-1.5 ${
-              tab === 'voter' ? 'bg-white text-gray-900 shadow-xs' : 'text-gray-500 hover:text-gray-700'
+            className={`min-h-[44px] flex-1 py-2.5 rounded-xl transition-colors flex items-center justify-center gap-1.5 ${
+              tab === 'voter' ? 'bg-white text-slate-900 shadow-2xs font-bold' : 'text-slate-500 hover:text-slate-700'
             }`}
           >
-            <Smartphone className="w-3.5 h-3.5" />
+            <Smartphone className="w-4 h-4" />
             I am a Voter
           </button>
           <button
             onClick={() => setTab('organizer')}
-            className={`flex-1 py-2 rounded-lg transition-colors flex items-center justify-center gap-1.5 ${
-              tab === 'organizer' ? 'bg-white text-gray-900 shadow-xs' : 'text-gray-500 hover:text-gray-700'
+            className={`min-h-[44px] flex-1 py-2.5 rounded-xl transition-colors flex items-center justify-center gap-1.5 ${
+              tab === 'organizer' ? 'bg-white text-slate-900 shadow-2xs font-bold' : 'text-slate-500 hover:text-slate-700'
             }`}
           >
-            <UserCheck className="w-3.5 h-3.5" />
-            I am an Event Organizer
+            <UserCheck className="w-4 h-4" />
+            Event Organizer
           </button>
         </div>
 
         {/* Form Body */}
-        <div className="p-6">
+        <div className="p-5 sm:p-6">
           {tab === 'voter' ? (
             <form onSubmit={handleVoterSubmit} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                   Enter your Ghana Mobile Number
                 </label>
                 <div className="relative">
-                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs font-medium text-gray-400">
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs font-medium text-slate-400">
                     +233
                   </span>
                   <input
@@ -114,17 +115,17 @@ export const SignInModal: React.FC<SignInModalProps> = ({
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
                     placeholder="24 123 4567"
-                    className="w-full pl-14 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white transition-all font-mono"
+                    className="w-full min-h-[44px] pl-14 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-rose-500 focus:bg-white transition-all font-mono"
                   />
                 </div>
-                <p className="text-[11px] text-gray-500 mt-1.5">
+                <p className="text-[11px] text-slate-500 mt-1.5">
                   No password required. We check your phone number to load your verified ballots and receipts.
                 </p>
               </div>
 
               <button
                 type="submit"
-                className="w-full py-3 bg-amber-500 hover:bg-amber-600 text-white font-semibold rounded-xl text-sm transition-colors shadow-xs flex items-center justify-center gap-2"
+                className="w-full min-h-[44px] py-3 bg-rose-600 hover:bg-rose-700 text-white font-semibold rounded-xl text-xs transition-colors shadow-2xs flex items-center justify-center gap-2 active:scale-98"
               >
                 Look Up My Votes
                 <ArrowRight className="w-4 h-4" />
@@ -133,14 +134,14 @@ export const SignInModal: React.FC<SignInModalProps> = ({
           ) : (
             <form onSubmit={handleOrgSubmit} className="space-y-4">
               {orgError && (
-                <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-center gap-2">
+                <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
                   <AlertCircle className="w-4 h-4 shrink-0" />
                   <span>{orgError}</span>
                 </div>
               )}
 
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                   Organizer Email
                 </label>
                 <input
@@ -149,12 +150,12 @@ export const SignInModal: React.FC<SignInModalProps> = ({
                   value={orgEmail}
                   onChange={(e) => setOrgEmail(e.target.value)}
                   placeholder="events@yourbrand.com"
-                  className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white transition-all font-mono"
+                  className="w-full min-h-[44px] px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-rose-500 focus:bg-white transition-all font-mono"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                   Password
                 </label>
                 <input
@@ -163,13 +164,13 @@ export const SignInModal: React.FC<SignInModalProps> = ({
                   value={orgPassword}
                   onChange={(e) => setOrgPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white transition-all font-mono"
+                  className="w-full min-h-[44px] px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-rose-500 focus:bg-white transition-all font-mono"
                 />
               </div>
 
               <button
                 type="submit"
-                className="w-full py-3 bg-gray-900 hover:bg-black text-white font-semibold rounded-xl text-sm transition-colors shadow-xs flex items-center justify-center gap-2"
+                className="w-full min-h-[44px] py-3 bg-slate-900 hover:bg-black text-white font-semibold rounded-xl text-xs transition-colors shadow-2xs flex items-center justify-center gap-2 active:scale-98"
               >
                 Log In to Organizer Studio
                 <ArrowRight className="w-4 h-4" />
@@ -179,7 +180,7 @@ export const SignInModal: React.FC<SignInModalProps> = ({
                 <button
                   type="button"
                   onClick={() => { onClose(); onNavigateToOrganizer(); }}
-                  className="text-xs text-amber-600 hover:text-amber-700 font-semibold"
+                  className="min-h-[44px] text-xs text-rose-600 hover:text-rose-700 font-semibold inline-flex items-center justify-center"
                 >
                   Need to host a new contest? Create an account here
                 </button>
