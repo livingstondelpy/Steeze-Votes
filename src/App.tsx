@@ -53,7 +53,10 @@ export default function App() {
     let active = true;
     checkCurrentSession()
       .then((session) => {
-        if (active) setIsAdminAuthenticated(session.isAdmin);
+        if (active) {
+          setIsAdminAuthenticated(session.isAdmin);
+          setCurrentOrganizer(session.organizer);
+        }
       })
       .catch(() => {
         if (active) setIsAdminAuthenticated(false);
