@@ -13,6 +13,8 @@ import {
   PayoutStatus 
 } from '../types';
 import { supabase, isSupabaseConfigured } from './supabase';
+
+const isProductionRuntime = () => (import.meta as any).env?.PROD === true;
 import { formatRpcVoteError } from './rpcErrors';
 
 // Simple deterministic hash for phone privacy and 1-free-vote enforcement
@@ -749,7 +751,7 @@ class AppStore {
     // In production, Supabase is the source of truth. Never hydrate the live app
     // with bundled demo contests, votes, organizers, payouts or browser-cached
     // transaction data when the backend is configured.
-    if (isSupabaseConfigured()) {
+    if (isSupabaseConfigured() || isProductionRuntime()) {
       this.organizers = [];
       this.contests = [];
       this.nominees = [];
@@ -828,7 +830,7 @@ class AppStore {
   // OTP Handling. The in-memory OTP below is development-only and must never
   // be presented as a real SMS verification flow in a configured deployment.
   sendOtp(phone: string, contestId: string): { success: boolean; message: string; simulatedOtp?: string } {
-    if (isSupabaseConfigured()) {
+    if (isSupabaseConfigured() || isProductionRuntime()) {
       return {
         success: false,
         message: 'Phone verification is not available yet. Please try again later.',
@@ -1378,7 +1380,7 @@ class AppStore {
   }
 
   reconcilePayment(transactionId: string): { success: boolean; message: string } {
-    if (isSupabaseConfigured()) {
+    if (isSupabaseConfigured() || isProductionRuntime()) {
       return { success: false, message: 'Payments can only be reconciled by the trusted server after Paystack verification.' };
     }
     const tx = this.transactions.find((t) => t.id === transactionId);
@@ -1557,7 +1559,7 @@ class AppStore {
   }
 
   loginOrganizer(_email: string, _password: string): { success: boolean; message: string; organizer?: OrganizerAccount } {
-    if (isSupabaseConfigured()) {
+    if (isSupabaseConfigured() || isProductionRuntime()) {
       return { success: false, message: 'Organizer sign-in must use Supabase Auth.' };
     }
     const cleanEmail = (_email || '').trim().toLowerCase();
