@@ -1442,7 +1442,7 @@ class AppStore {
       const { data: existingRows, error: existingError } = await supabase.from('payout_requests').select('id,status').eq('contest_id', contestId).in('status', ['pending', 'processing', 'paid']);
       if (existingError) return { success: false, message: 'Could not check existing payout requests.' };
       if (existingRows?.length) return { success: false, message: `A payout request is already ${existingRows[0].status} for this contest.` };
-      const { data: txRows, error: txError } = await supabase.from('transactions').select('amount_ghs').eq('contest_id', contestId).eq('status', 'success');
+      const { data: txRows, error: txError } = await supabase.from('organizer_transactions_view').select('amount_ghs').eq('contest_id', contestId).eq('status', 'success');
       if (txError) return { success: false, message: 'Could not calculate verified contest revenue.' };
       grossGmv = (txRows || []).reduce((sum: number, row: any) => sum + Number(row.amount_ghs || 0), 0);
     } else {
