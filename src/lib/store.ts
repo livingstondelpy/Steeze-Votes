@@ -1046,7 +1046,8 @@ class AppStore {
       updatedAt: new Date().toISOString(),
     };
 
-    // If Supabase is connected, write contest and bundle tiers to separate tables
+    if (isProductionRuntime() && !isSupabaseConfigured()) throw new Error('Database configuration is required to create contests.');
+    // Persist to Supabase before publishing the new contest in application state.
     if (isSupabaseConfigured()) {
       try {
         const { error: contestError } = await supabase.from('contests').insert({
@@ -1073,9 +1074,7 @@ class AppStore {
           featured: contestData.featured || false,
         });
 
-        if (contestError) {
-          console.error('Failed to insert contest into Supabase:', contestError);
-        }
+        if (contestError) throw contestError;
 
         // Insert bundle tiers into public.bundle_tiers separate table
         if (contestData.contestType === 'paid' && contestData.bundleTiers && contestData.bundleTiers.length > 0) {
@@ -1092,11 +1091,13 @@ class AppStore {
 
           const { error: bundleError } = await supabase.from('bundle_tiers').insert(bundleRows);
           if (bundleError) {
-            console.error('Failed to insert bundle tiers into Supabase:', bundleError);
+            await supabase.from('contests').delete().eq('id', id);
+            throw bundleError;
           }
         }
       } catch (err) {
         console.error('Supabase contest creation error:', err);
+        throw new Error('Contest could not be saved to the database.');
       }
     }
 
@@ -1106,14 +1107,7 @@ class AppStore {
   }
 
   async updateContest(contestId: string, updates: Partial<Contest>) {
-    this.contests = this.contests.map((c) => {
-      if (c.id === contestId) {
-        return { ...c, ...updates, updatedAt: new Date().toISOString() };
-      }
-      return c;
-    });
-    this.saveState();
-
+    if (isProductionRuntime() && !isSupabaseConfigured()) throw new Error('Database configuration is required to update contests.');
     if (isSupabaseConfigured()) {
       try {
         const dbUpdates: any = {};
@@ -1128,11 +1122,15 @@ class AppStore {
         if (updates.bannerOrder !== undefined) dbUpdates.banner_order = updates.bannerOrder;
         if (updates.featured !== undefined) dbUpdates.featured = updates.featured;
 
-        await supabase.from('contests').update(dbUpdates).eq('id', contestId);
+        const { error } = await supabase.from('contests').update(dbUpdates).eq('id', contestId);
+        if (error) throw error;
       } catch (err) {
         console.warn('Failed to update contest in Supabase:', err);
+        throw new Error('Contest update failed to save to the database.');
       }
     }
+    this.contests = this.contests.map((c) => c.id === contestId ? { ...c, ...updates, updatedAt: new Date().toISOString() } : c);
+    this.saveState();
   }
 
   async addNominee(
@@ -1157,9 +1155,10 @@ class AppStore {
       createdAt: new Date().toISOString(),
     };
 
+    if (isProductionRuntime() && !isSupabaseConfigured()) throw new Error('Database configuration is required to add nominees.');
     if (isSupabaseConfigured()) {
       try {
-        await supabase.from('nominees').insert({
+        const { error } = await supabase.from('nominees').insert({
           id,
           contest_id: contestId,
           name: nomineeData.name,
@@ -1170,8 +1169,10 @@ class AppStore {
           category: nomineeData.category || 'General',
           status: nomineeData.status || 'active',
         });
+        if (error) throw error;
       } catch (err) {
         console.error('Failed to insert nominee into Supabase:', err);
+        throw new Error('Nominee could not be saved to the database.');
       }
     }
 
@@ -1181,16 +1182,13 @@ class AppStore {
   }
 
   async deleteNominee(nomineeId: string) {
+    if (isProductionRuntime() && !isSupabaseConfigured()) throw new Error('Database configuration is required to delete nominees.');
+    if (isSupabaseConfigured()) {
+      const { error } = await supabase.from('nominees').delete().eq('id', nomineeId);
+      if (error) throw new Error('Nominee could not be deleted from the database.');
+    }
     this.nominees = this.nominees.filter((n) => n.id !== nomineeId);
     this.saveState();
-
-    if (isSupabaseConfigured()) {
-      try {
-        await supabase.from('nominees').delete().eq('id', nomineeId);
-      } catch (err) {
-        console.warn('Failed to delete nominee from Supabase:', err);
-      }
-    }
   }
 
   // Admin Settings & Content Moderation
