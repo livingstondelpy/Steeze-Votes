@@ -24,7 +24,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const response = await fetch(`https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`, { headers: { Authorization: `Bearer ${paystackSecret}` } });
   const verified = await response.json().catch(() => null);
   if (!response.ok || !verified?.status || verified?.data?.status !== 'success' || verified?.data?.reference !== reference) {
-    if (req.method === 'GET' && appUrl) return res.redirect(303, `${appUrl.replace(/\/$/, '')}/?payment=failed`);
+    if (req.method === 'GET' && appUrl) return res.redirect(303, `${appUrl.replace(/\/$/, '')}/?payment=failed&reference=${encodeURIComponent(reference)}`);
     return json(res, 402, { error: 'Payment is not verified as successful.' });
   }
 
