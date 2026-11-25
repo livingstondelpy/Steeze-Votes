@@ -1187,33 +1187,17 @@ class AppStore {
 
   // Admin Settings & Content Moderation
   async updateSystemSettings(updates: Partial<PlatformSettings>) {
+    if (isProductionRuntime() && !isSupabaseConfigured()) throw new Error('Database configuration is required to save platform settings.');
+    if (isSupabaseConfigured()) {
+      const writes: PromiseLike<any>[] = [];
+      if (updates.defaultCommissionRate !== undefined) writes.push(supabase.from('platform_settings').upsert({ key: 'default_commission_rate', value: updates.defaultCommissionRate }));
+      if (updates.maxActiveContestsPerOrganizer !== undefined) writes.push(supabase.from('platform_settings').upsert({ key: 'max_active_contests_per_organizer', value: updates.maxActiveContestsPerOrganizer }));
+      if (updates.maintenanceMode !== undefined) writes.push(supabase.from('platform_settings').upsert({ key: 'maintenance_mode', value: updates.maintenanceMode }));
+      const results = await Promise.all(writes);
+      if (results.some((result: any) => result.error)) throw new Error('Platform settings could not be saved to the database.');
+    }
     this.systemSettings = { ...this.systemSettings, ...updates };
     this.saveState();
-
-    if (isSupabaseConfigured()) {
-      try {
-        if (updates.defaultCommissionRate !== undefined) {
-          await supabase.from('platform_settings').upsert({
-            key: 'default_commission_rate',
-            value: updates.defaultCommissionRate,
-          });
-        }
-        if (updates.maxActiveContestsPerOrganizer !== undefined) {
-          await supabase.from('platform_settings').upsert({
-            key: 'max_active_contests_per_organizer',
-            value: updates.maxActiveContestsPerOrganizer,
-          });
-        }
-        if (updates.maintenanceMode !== undefined) {
-          await supabase.from('platform_settings').upsert({
-            key: 'maintenance_mode',
-            value: updates.maintenanceMode,
-          });
-        }
-      } catch (err) {
-        console.warn('Failed to update platform_settings in Supabase:', err);
-      }
-    }
   }
 
   approveContest(contestId: string) {
