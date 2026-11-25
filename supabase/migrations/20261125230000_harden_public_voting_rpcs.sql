@@ -62,6 +62,12 @@ BEGIN
 END;
 $function$;
 
+-- Until a server-side SMS OTP verifier is implemented, public clients must not be able to cast an unverified free vote.
+REVOKE EXECUTE ON FUNCTION public.cast_free_vote(uuid, uuid, text) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.cast_free_vote(uuid, uuid, text) FROM anon;
+REVOKE EXECUTE ON FUNCTION public.cast_free_vote(uuid, uuid, text) FROM authenticated;
+GRANT EXECUTE ON FUNCTION public.cast_free_vote(uuid, uuid, text) TO service_role;
+
 -- Anyone knowing a phone number should not be able to retrieve that number's vote history.
 REVOKE EXECUTE ON FUNCTION public.get_my_votes(text, uuid) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION public.get_my_votes(text, uuid) FROM anon;
