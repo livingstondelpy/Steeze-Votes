@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { UserCheck, Lock, AlertCircle, ArrowRight, CheckCircle2, ShieldCheck, FileText, RefreshCw } from 'lucide-react';
 import { OrganizerAccount, MomoNetwork } from '../../types';
-import { store } from '../../lib/store';
 import { signInOrganizer, signUpOrganizer, sendOrganizerPasswordReset, updateOrganizerPassword } from '../../lib/auth';
 import { OrganizerTermsModal } from '../legal/OrganizerTermsModal';
 
@@ -116,12 +115,6 @@ export const OrganizerAuth: React.FC<OrganizerAuthProps> = ({
       } else setError(result.message);
     } catch { setError('Password could not be updated. Request a fresh reset email and try again.'); }
     finally { setLoading(false); }
-  };
-
-  const handleDemoFill = (email: string) => {
-    setLoginEmail(email);
-    setLoginPassword('demo123');
-    setMode('login');
   };
 
   return (
