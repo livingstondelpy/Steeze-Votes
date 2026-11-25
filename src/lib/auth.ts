@@ -15,11 +15,7 @@ export async function signInAdmin(
   password: string
 ): Promise<{ success: boolean; message: string; userId?: string }> {
   if (!isSupabaseConfigured()) {
-    // Fallback for offline demo mode
-    if (email.trim().toLowerCase() === 'admin@steezevotes.com' && password === 'admin123') {
-      return { success: true, message: 'Logged in as Admin (Demo Mode)' };
-    }
-    return { success: false, message: 'Invalid admin credentials or Supabase not connected.' };
+    return { success: false, message: 'Admin sign-in is unavailable because Supabase is not configured.' };
   }
 
   try {
@@ -29,11 +25,7 @@ export async function signInAdmin(
     });
 
     if (error) {
-      // If demo credentials are used on unseeded auth, provide helpful message
-      if (email.trim().toLowerCase() === 'admin@steezevotes.com' && password === 'admin123') {
-        return { success: true, message: 'Logged in as Admin (Demo Fallback)' };
-      }
-      return { success: false, message: error.message };
+      return { success: false, message: 'Sign-in failed. Check your email and password.' };
     }
 
     if (!data.user) {
@@ -47,19 +39,12 @@ export async function signInAdmin(
       .eq('user_id', data.user.id)
       .maybeSingle();
 
-    if (roleError && roleError.code !== 'PGRST116') {
-      console.warn('Could not query user_roles table:', roleError);
-    }
-
-    if (roleRow?.role !== 'admin') {
-      // If not an admin in user_roles, check if user has admin email or reject
-      if (email.trim().toLowerCase() !== 'admin@steezevotes.com') {
-        await supabase.auth.signOut();
-        return {
-          success: false,
-          message: 'Access denied. Your account is not registered with role = "admin" in public.user_roles.',
-        };
-      }
+    if (roleError || roleRow?.role !== 'admin') {
+      await supabase.auth.signOut();
+      return {
+        success: false,
+        message: 'Access denied. This account does not have the administrator role.',
+      };
     }
 
     return { success: true, message: 'Admin authenticated successfully', userId: data.user.id };
@@ -257,7 +242,7 @@ export async function checkCurrentSession(): Promise<{
       .eq('user_id', user.id)
       .maybeSingle();
 
-    if (roleRow?.role === 'admin' || user.email === 'admin@steezevotes.com') {
+    if (roleRow?.role === 'admin') {
       isAdmin = true;
     }
 
