@@ -26,6 +26,19 @@ export default function App() {
   const [isTrustModalOpen, setIsTrustModalOpen] = useState(false);
   const [isSignInModalOpen, setIsSignInModalOpen] = useState(false);
   const [isDark, setIsDark] = useState<boolean>(false);
+  const [paymentNotice, setPaymentNotice] = useState<{ status: 'success' | 'failed'; receipt?: string } | null>(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const payment = params.get('payment');
+    if (payment === 'success' || payment === 'failed') {
+      setPaymentNotice({ status: payment, receipt: params.get('receipt') || undefined });
+      params.delete('payment');
+      params.delete('receipt');
+      const query = params.toString();
+      window.history.replaceState({}, '', window.location.pathname + (query ? '?' + query : '') + window.location.hash);
+    }
+  }, []);
 
   // Portal Tab navigation states
   const [activeAdminTab, setActiveAdminTab] = useState<AdminTab>('overview');
@@ -258,6 +271,14 @@ export default function App() {
 
       {/* Main View Container with top padding to prevent fixed navbar from hiding content */}
       <main className="flex-1 pt-16">
+        {paymentNotice && (
+          <div role="status" className={`mx-auto mt-4 max-w-4xl rounded-xl border px-4 py-3 text-sm ${paymentNotice.status === 'success' ? 'border-emerald-200 bg-emerald-50 text-emerald-900' : 'border-rose-200 bg-rose-50 text-rose-900'}`}>
+            {paymentNotice.status === 'success'
+              ? `Paystack confirms payment. Your vote was recorded. Receipt: ${paymentNotice.receipt || 'check your payment email'}.`
+              : 'Paystack did not confirm the payment. No votes were credited. If you were charged, contact support with your Paystack reference.'}
+            <button type="button" className="ml-3 font-semibold underline" onClick={() => setPaymentNotice(null)}>Dismiss</button>
+          </div>
+        )}
         {systemSettings.maintenanceMode && activeView !== 'admin' && activeView !== 'rss-admin' ? (
           <div className="min-h-[70vh] flex items-center justify-center p-6 text-center">
             <div className="max-w-md bg-white rounded-2xl border border-slate-200 p-8 shadow-sm space-y-4 text-slate-900">
