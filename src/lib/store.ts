@@ -696,6 +696,100 @@ class AppStore {
     }
   }
 
+  async fetchAdminDataFromSupabase(): Promise<void> {
+    if (!isSupabaseConfigured()) return;
+    await Promise.allSettled([this.fetchContestsFromSupabase(), this.fetchNomineesFromSupabase()]);
+    const [orgResult, txResult, anomalyResult, payoutResult, freeVoteResult] = await Promise.all([
+      supabase.from('organizers').select('id,email,organization_name,contact_phone,momo_number,momo_network,status,profile_picture_url,bio,created_at'),
+      supabase.from('transactions').select('id,reference,contest_id,nominee_id,vote_count,amount_ghs,fee_ghs,total_charged_ghs,organizer_revenue_ghs,rss_commission_ghs,voter_phone_hash,momo_network,status,receipt_code,paystack_reference,created_at').order('created_at', { ascending: false }),
+      supabase.from('anomalies').select('id,contest_id,nominee_id,reason,severity,reviewed,admin_notes,created_at'),
+      supabase.from('payout_requests').select('id,contest_id,organizer_id,gross_revenue_ghs,rss_fee_ghs,net_payout_ghs,status,momo_network,momo_number,momo_transaction_ref,requested_at,processed_at,admin_notes'),
+      supabase.from('free_vote_records').select('id,contest_id,nominee_id,phone_hash,voted_at').order('voted_at', { ascending: false }),
+    ]);
+
+    if (!orgResult.error && orgResult.data) {
+      this.organizers = orgResult.data.map((row: any) => ({
+        id: row.id, email: row.email, organizationName: row.organization_name,
+        contactPhone: row.contact_phone, momoNumber: row.momo_number, momoNetwork: row.momo_network,
+        status: row.status, profilePictureUrl: row.profile_picture_url || undefined,
+        bio: row.bio || undefined, createdAt: row.created_at,
+      }));
+    }
+    if (!txResult.error && txResult.data) {
+      this.transactions = txResult.data.map((row: any) => ({
+        id: row.id, reference: row.reference, contestId: row.contest_id, nomineeId: row.nominee_id,
+        nomineeName: this.nominees.find((n) => n.id === row.nominee_id)?.stageName || this.nominees.find((n) => n.id === row.nominee_id)?.name,
+        voteCount: Number(row.vote_count), amountGhs: Number(row.amount_ghs), feeGhs: Number(row.fee_ghs),
+        totalChargedGhs: Number(row.total_charged_ghs), organizerRevenueGhs: Number(row.organizer_revenue_ghs),
+        rssCommissionGhs: Number(row.rss_commission_ghs), momoNetwork: row.momo_network, status: row.status,
+        receiptCode: row.receipt_code, paystackReference: row.paystack_reference || undefined, createdAt: row.created_at,
+      }));
+    }
+    if (!anomalyResult.error && anomalyResult.data) {
+      this.anomalies = anomalyResult.data.map((row: any) => ({
+        id: row.id, contestId: row.contest_id, contestTitle: this.contests.find((c) => c.id === row.contest_id)?.title,
+        nomineeId: row.nominee_id || undefined, nomineeName: this.nominees.find((n) => n.id === row.nominee_id)?.name,
+        reason: row.reason, severity: row.severity, resolved: Boolean(row.reviewed),
+        actionTaken: row.admin_notes || undefined, detectedAt: row.created_at,
+      }));
+    }
+    if (!payoutResult.error && payoutResult.data) {
+      this.payoutRequests = payoutResult.data.map((row: any) => ({
+        id: row.id, contestId: row.contest_id, contestTitle: this.contests.find((c) => c.id === row.contest_id)?.title,
+        organizerId: row.organizer_id, organizerName: this.organizers.find((o) => o.id === row.organizer_id)?.organizationName,
+        grossRevenueGhs: Number(row.gross_revenue_ghs), rssFeeGhs: Number(row.rss_fee_ghs), netPayoutGhs: Number(row.net_payout_ghs),
+        status: row.status, momoNetwork: row.momo_network, momoNumber: row.momo_number,
+        momoTransactionRef: row.momo_transaction_ref || undefined, requestedAt: row.requested_at,
+        processedAt: row.processed_at || undefined, adminNotes: row.admin_notes || undefined,
+      }));
+    }
+    if (!txResult.error && txResult.data && !freeVoteResult.error && freeVoteResult.data) {
+      const paidVotes: VoteRecord[] = this.transactions.map((tx) => ({
+        id: tx.id, contestId: tx.contestId, contestTitle: this.contests.find((c) => c.id === tx.contestId)?.title,
+        nomineeId: tx.nomineeId, nomineeName: tx.nomineeName, voteType: 'paid', voteCount: tx.voteCount,
+        voterPhoneHashed: (txResult.data as any[]).find((row) => row.id === tx.id)?.voter_phone_hash || undefined,
+        receiptCode: tx.receiptCode, transactionId: tx.id, amountPaidGhs: tx.amountGhs, feeGhs: tx.feeGhs,
+        momoNetwork: tx.momoNetwork, createdAt: tx.createdAt,
+      }));
+      const freeVotes: VoteRecord[] = freeVoteResult.data.map((row: any) => ({
+        id: row.id, contestId: row.contest_id, contestTitle: this.contests.find((c) => c.id === row.contest_id)?.title,
+        nomineeId: row.nominee_id, nomineeName: this.nominees.find((n) => n.id === row.nominee_id)?.name,
+        voteType: 'free', voteCount: 1, voterPhoneHashed: row.phone_hash, receiptCode: '',
+        amountPaidGhs: 0, feeGhs: 0, createdAt: row.voted_at,
+      }));
+      this.votes = [...paidVotes, ...freeVotes].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    }
+    this.saveState();
+  }
+
+  async fetchOrganizerDataFromSupabase(organizerId: string): Promise<void> {
+    if (!isSupabaseConfigured()) return;
+    const [txResult, payoutResult] = await Promise.all([
+      supabase.from('organizer_transactions_view').select('*').eq('contest_id', this.contests.map((c) => c.id)).order('created_at', { ascending: false }),
+      supabase.from('payout_requests').select('id,contest_id,organizer_id,gross_revenue_ghs,rss_fee_ghs,net_payout_ghs,status,momo_network,momo_number,momo_transaction_ref,requested_at,processed_at,admin_notes').eq('organizer_id', organizerId),
+    ]);
+    if (!txResult.error && txResult.data) {
+      this.transactions = txResult.data.map((row: any) => ({
+        id: row.id, reference: row.reference || '', contestId: row.contest_id, nomineeId: row.nominee_id,
+        nomineeName: row.nominee_name, voteCount: Number(row.vote_count), amountGhs: Number(row.amount_ghs),
+        feeGhs: 0, totalChargedGhs: Number(row.amount_ghs), organizerRevenueGhs: Number(row.organizer_revenue_ghs),
+        rssCommissionGhs: 0, momoNetwork: 'MTN', status: row.status, receiptCode: row.receipt_code || '',
+        createdAt: row.created_at,
+      }));
+    }
+    if (!payoutResult.error && payoutResult.data) {
+      this.payoutRequests = payoutResult.data.map((row: any) => ({
+        id: row.id, contestId: row.contest_id, contestTitle: this.contests.find((c) => c.id === row.contest_id)?.title,
+        organizerId: row.organizer_id, organizerName: this.organizers.find((o) => o.id === row.organizer_id)?.organizationName,
+        grossRevenueGhs: Number(row.gross_revenue_ghs), rssFeeGhs: Number(row.rss_fee_ghs), netPayoutGhs: Number(row.net_payout_ghs),
+        status: row.status, momoNetwork: row.momo_network, momoNumber: row.momo_number,
+        momoTransactionRef: row.momo_transaction_ref || undefined, requestedAt: row.requested_at,
+        processedAt: row.processed_at || undefined, adminNotes: row.admin_notes || undefined,
+      }));
+    }
+    this.saveState();
+  }
+
   /**
    * Fetch organizer transactions using the safe public.organizer_transactions_view (Excludes voter_phone)
    */
