@@ -17,6 +17,7 @@ import { TrustBadgeModal } from './components/TrustBadgeModal';
 import { FloatingQuickAction } from './components/voter/FloatingQuickAction';
 import { UserRole, OrganizerAccount } from './types';
 import { store } from './lib/store';
+import { checkCurrentSession, signOutUser } from './lib/auth';
 
 export default function App() {
   const [currentRole, setCurrentRole] = useState<UserRole>('voter');
@@ -31,13 +32,23 @@ export default function App() {
   const [activeOrganizerTab, setActiveOrganizerTab] = useState<OrganizerTab>('dashboard');
 
   // Authentication States (Blocked until logged in)
-  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState<boolean>(() => {
-    try {
-      return sessionStorage.getItem('steeze_admin_auth') === 'true';
-    } catch {
-      return false;
-    }
-  });
+  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
+
+  // Admin access is derived from the active Supabase Auth session and database role,
+  // never from a client-controlled sessionStorage flag.
+  useEffect(() => {
+    let active = true;
+    checkCurrentSession()
+      .then((session) => {
+        if (active) setIsAdminAuthenticated(session.isAdmin);
+      })
+      .catch(() => {
+        if (active) setIsAdminAuthenticated(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const [currentOrganizer, setCurrentOrganizer] = useState<OrganizerAccount | null>(() => {
     try {
@@ -378,9 +389,6 @@ export default function App() {
                 <AdminLogin
                   onLoginSuccess={() => {
                     setIsAdminAuthenticated(true);
-                    try {
-                      sessionStorage.setItem('steeze_admin_auth', 'true');
-                    } catch {}
                   }}
                   onBackToHome={() => navigateToView('home', 'voter')}
                 />
@@ -399,9 +407,7 @@ export default function App() {
                   onBackToHome={() => navigateToView('home', 'voter')}
                   onLogout={() => {
                     setIsAdminAuthenticated(false);
-                    try {
-                      sessionStorage.removeItem('steeze_admin_auth');
-                    } catch {}
+                    void signOutUser();
                   }}
                 />
               )
