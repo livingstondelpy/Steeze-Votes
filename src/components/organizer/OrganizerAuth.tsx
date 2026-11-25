@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { UserCheck, Lock, AlertCircle, ArrowRight, CheckCircle2, ShieldCheck, FileText, RefreshCw } from 'lucide-react';
 import { OrganizerAccount, MomoNetwork } from '../../types';
 import { store } from '../../lib/store';
+import { signInOrganizer, signUpOrganizer, sendOrganizerPasswordReset } from '../../lib/auth';
 import { OrganizerTermsModal } from '../legal/OrganizerTermsModal';
 
 interface OrganizerAuthProps {
@@ -38,23 +39,21 @@ export const OrganizerAuth: React.FC<OrganizerAuthProps> = ({
   const [loading, setLoading] = useState(false);
   const [showTermsModal, setShowTermsModal] = useState(false);
 
-  const handleLoginSubmit = (e: React.FormEvent) => {
+  const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setSuccessMsg(null);
     setLoading(true);
 
-    const result = store.loginOrganizer(loginEmail, loginPassword);
-    setLoading(false);
-
-    if (result.success && result.organizer) {
-      onLoginSuccess(result.organizer);
-    } else {
-      setError(result.message);
-    }
+    try {
+      const result = await signInOrganizer(loginEmail, loginPassword);
+      if (result.success && result.organizer) onLoginSuccess(result.organizer);
+      else setError(result.message);
+    } catch { setError('Unable to sign in right now. Please try again.'); }
+    finally { setLoading(false); }
   };
 
-  const handleSignupSubmit = (e: React.FormEvent) => {
+  const handleSignupSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setSuccessMsg(null);
@@ -66,7 +65,8 @@ export const OrganizerAuth: React.FC<OrganizerAuthProps> = ({
 
     setLoading(true);
 
-    const result = store.registerOrganizer({
+    try {
+    const result = await signUpOrganizer({
       organizationName: signupOrgName,
       email: signupEmail,
       password: signupPassword,
@@ -76,29 +76,24 @@ export const OrganizerAuth: React.FC<OrganizerAuthProps> = ({
       agreedToTerms,
     });
 
-    setLoading(false);
-
-    if (result.success && result.organizer) {
-      onLoginSuccess(result.organizer);
-    } else {
-      setError(result.message);
-    }
+    if (result.success && result.organizer) onLoginSuccess(result.organizer);
+    else if (result.success) setSuccessMsg(result.message);
+    else setError(result.message);
+    } catch { setError('Unable to create your account right now. Please try again.'); }
+    finally { setLoading(false); }
   };
 
-  const handleForgotSubmit = (e: React.FormEvent) => {
+  const handleForgotSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setSuccessMsg(null);
     setLoading(true);
 
-    const result = store.resetOrganizerPassword(forgotEmail);
-    setLoading(false);
-
-    if (result.success) {
-      setSuccessMsg(result.message);
-    } else {
-      setError(result.message);
-    }
+    try {
+      const result = await sendOrganizerPasswordReset(forgotEmail);
+      if (result.success) setSuccessMsg(result.message); else setError(result.message);
+    } catch { setError('Unable to send a reset email right now. Please try again.'); }
+    finally { setLoading(false); }
   };
 
   const handleDemoFill = (email: string) => {
@@ -389,7 +384,7 @@ export const OrganizerAuth: React.FC<OrganizerAuthProps> = ({
                 </>
               ) : (
                 <>
-                  Send Reset Link &amp; Temporary Passcode <ArrowRight className="w-4 h-4" />
+                  Send Password Reset Email <ArrowRight className="w-4 h-4" />
                 </>
               )}
             </button>
