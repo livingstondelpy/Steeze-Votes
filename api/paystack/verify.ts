@@ -7,7 +7,14 @@ const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (c) => ({ '&': '
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'GET' && req.method !== 'POST') return json(res, 405, { error: 'Method not allowed' });
   const reference = String(req.method === 'GET' ? req.query.reference || '' : req.body?.reference || '').trim();
-  const appUrl = process.env.APP_URL || '';
+  const configuredAppUrl = process.env.APP_URL || 'https://steezevotes.vercel.app';
+  const requestedAppUrl = typeof req.query.app_url === 'string' ? req.query.app_url : configuredAppUrl;
+  let appUrl = configuredAppUrl;
+  try {
+    const candidate = new URL(requestedAppUrl);
+    const configured = new URL(configuredAppUrl);
+    if (candidate.protocol === 'https:' && (candidate.hostname.endsWith('.vercel.app') || candidate.origin === configured.origin)) appUrl = candidate.origin;
+  } catch { appUrl = configuredAppUrl; }
   const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY;
   const paystackSecret = process.env.PAYSTACK_SECRET_KEY || process.env.PAYSTACK_PRIVATE_KEY;
@@ -32,6 +39,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const db = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
+  const { data: contest, error: contestError } = await db.from('contests').select('id,contest_type,status,price_per_vote').eq('id', String(meta.contest_id)).maybeSingle();
+  const { data: nominee, error: nomineeError } = await db.from('nominees').select('id,status').eq('id', String(meta.nominee_id)).eq('contest_id', String(meta.contest_id)).maybeSingle();
+  if (contestError || nomineeError || !contest || contest.contest_type !== 'paid' || contest.status !== 'active' || !nominee || nominee.status !== 'active') {
+    return json(res, 409, { error: 'Contest or nominee is no longer accepting votes. Contact support with reference: ' + reference });
+  }
+  const { data: tier, error: tierError } = await db.from('bundle_tiers').select('votes,price_ghs').eq('contest_id', String(meta.contest_id)).eq('votes', Number(meta.vote_count)).eq('is_active', true).maybeSingle();
+  if (tierError) return json(res, 500, { error: 'Could not validate the purchased bundle.' });
+  const expectedAmount = tier ? Number(tier.price_ghs) : Number((Number(contest.price_per_vote) * Number(meta.vote_count)).toFixed(2));
+  if (!Number.isFinite(expectedAmount) || expectedAmount <= 0 || Number(meta.amount_ghs) !== expectedAmount) return json(res, 400, { error: 'Payment metadata does not match the current vote bundle.' });
   const { data: existing, error: existingError } = await db.from('transactions').select('receipt_code,status').eq('reference', reference).maybeSingle();
   if (existingError) return json(res, 500, { error: 'Could not confirm the transaction record.' });
   let receiptCode = existing?.receipt_code as string | undefined;
