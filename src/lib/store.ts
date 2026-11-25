@@ -746,6 +746,21 @@ class AppStore {
   }
 
   private loadState() {
+    // In production, Supabase is the source of truth. Never hydrate the live app
+    // with bundled demo contests, votes, organizers, payouts or browser-cached
+    // transaction data when the backend is configured.
+    if (isSupabaseConfigured()) {
+      this.organizers = [];
+      this.contests = [];
+      this.nominees = [];
+      this.votes = [];
+      this.transactions = [];
+      this.anomalies = [];
+      this.payoutRequests = [];
+      this.lowDataMode = false;
+      return;
+    }
+
     try {
       const savedOrganizers = localStorage.getItem('steeze_organizers');
       const savedContests = localStorage.getItem('steeze_contests');
@@ -1363,6 +1378,9 @@ class AppStore {
   }
 
   reconcilePayment(transactionId: string): { success: boolean; message: string } {
+    if (isSupabaseConfigured()) {
+      return { success: false, message: 'Payments can only be reconciled by the trusted server after Paystack verification.' };
+    }
     const tx = this.transactions.find((t) => t.id === transactionId);
     if (!tx) {
       return { success: false, message: 'Transaction reference not found.' };
@@ -1533,22 +1551,17 @@ class AppStore {
   }
 
   // Admin & Organizer Authentication Methods
-  loginAdmin(email: string, password: string): { success: boolean; message: string } {
-    const cleanEmail = (email || '').trim().toLowerCase();
-    const cleanPass = (password || '').trim();
-
-    const validAdminEmails = ['admin@steezevotes.com', 'rssadmin@steezevotes.com', 'events@rootedsteeze.com'];
-    const validAdminPasswords = ['admin123', 'rss2026'];
-
-    if (validAdminEmails.includes(cleanEmail) && validAdminPasswords.includes(cleanPass)) {
-      return { success: true, message: 'Admin authentication successful.' };
-    }
-
-    return { success: false, message: 'Invalid admin email or password. Access denied.' };
+  loginAdmin(_email: string, _password: string): { success: boolean; message: string } {
+    // Authentication must use Supabase Auth and the database admin role.
+    return { success: false, message: 'Use the secure administrator sign-in service.' };
   }
 
-  loginOrganizer(email: string, password: string): { success: boolean; message: string; organizer?: OrganizerAccount } {
-    const cleanEmail = (email || '').trim().toLowerCase();
+  loginOrganizer(_email: string, _password: string): { success: boolean; message: string; organizer?: OrganizerAccount } {
+    if (isSupabaseConfigured()) {
+      return { success: false, message: 'Organizer sign-in must use Supabase Auth.' };
+    }
+    const cleanEmail = (_email || '').trim().toLowerCase();
+    const password = _password;
     const cleanPass = (password || '').trim();
 
     if (!cleanEmail || !cleanPass) {
