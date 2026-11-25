@@ -604,7 +604,7 @@ class AppStore {
         .order('banner_order', { ascending: true, nullsFirst: false })
         .order('created_at', { ascending: false });
 
-      if (!error && data && data.length > 0) {
+      if (!error && data) {
         this.contests = data.map((c: any) => ({
           id: c.id,
           slug: c.slug,
@@ -663,7 +663,7 @@ class AppStore {
         query = query.eq('contest_id', contestId);
       }
       const { data, error } = await query;
-      if (!error && data && data.length > 0) {
+      if (!error && data) {
         const mapped = data.map((n: any) => ({
           id: n.id,
           contestId: n.contest_id,
@@ -967,146 +967,13 @@ class AppStore {
     return { success: true, message: 'Free verified vote cast successfully!', receipt: newVote };
   }
 
-  async processPaidVote(params: {
-    contestId: string;
-    nomineeId: string;
-    voteCount: number;
-    amountGhs: number;
-    voterPhone: string;
-    momoNetwork: MomoNetwork;
-    consentedMarketing: boolean;
-    paystackReference?: string;
+  async processPaidVote(_params: {
+    contestId: string; nomineeId: string; voteCount: number; amountGhs: number;
+    voterPhone: string; momoNetwork: MomoNetwork; consentedMarketing: boolean; paystackReference?: string;
   }): Promise<{ success: boolean; message: string; receipt?: VoteRecord; transaction?: Transaction }> {
-    const { contestId, nomineeId, voteCount, amountGhs, voterPhone, momoNetwork, consentedMarketing, paystackReference } = params;
-    const cleanPhone = (voterPhone || '').replace(/[^0-9]/g, '');
-
-    const contest = this.contests.find((c) => c.id === contestId);
-    const nominee = this.nominees.find((n) => n.id === nomineeId);
-
-    if (!contest || !nominee) {
-      return { success: false, message: 'Invalid contest or nominee.' };
-    }
-
-    if (contest.status !== 'active') {
-      return { success: false, message: 'Voting is currently paused or has ended for this contest.' };
-    }
-
-    const feeGhs = calculatePaystackFee(amountGhs);
-    const totalCharged = +(amountGhs + feeGhs).toFixed(2);
-    
-    // Commission from platform_settings (default_commission_rate = 0.10)
-    const commissionRate = this.systemSettings.defaultCommissionRate || 0.10;
-    const rssCommission = +(amountGhs * commissionRate).toFixed(2);
-    const organizerRevenue = +(amountGhs * (1 - commissionRate)).toFixed(2);
-
-    const receiptCode = generateReceiptCode();
-    const reference = paystackReference || `PAYSTACK-${receiptCode}-${Date.now()}`;
-
-    // Paid votes must be verified server-side by Paystack before a transaction
-    // or vote is recorded. The legacy RPC is not present in the current schema,
-    // so fail closed rather than treating a client callback as proof of payment.
-    if (isSupabaseConfigured()) {
-      try {
-        const { data: verificationResult, error: rpcError } = await supabase.rpc('confirm_paystack_vote', {
-          p_paystack_reference: reference,
-        });
-
-        if (rpcError || !verificationResult || verificationResult.success !== true) {
-          console.error('Paid vote verification failed:', rpcError?.message || 'No verified payment result');
-          return {
-            success: false,
-            message: 'Payment confirmation is not available yet. Your vote has not been recorded. If you were charged, contact support with your Paystack reference.',
-          };
-        }
-      } catch (err) {
-        console.error('Paid vote verification failed:', err);
-        return {
-          success: false,
-          message: 'Payment confirmation is temporarily unavailable. Your vote has not been recorded.',
-        };
-      }
-    } else {
-      return {
-        success: false,
-        message: 'Paid voting is unavailable until the secure payment service is configured.',
-      };
-    }
-
-    const newTx: Transaction = {
-      id: `tx-${Date.now()}`,
-      reference,
-      contestId,
-      nomineeId,
-      nomineeName: nominee.stageName || nominee.name,
-      voteCount,
-      amountGhs,
-      feeGhs,
-      totalChargedGhs: totalCharged,
-      organizerRevenueGhs: organizerRevenue,
-      rssCommissionGhs: rssCommission,
-      voterPhone: cleanPhone,
-      momoNetwork,
-      status: 'success',
-      receiptCode,
-      paystackReference,
-      createdAt: new Date().toISOString(),
-    };
-
-    const newVote: VoteRecord = {
-      id: `vote-paid-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-      contestId,
-      contestTitle: contest.title,
-      nomineeId,
-      nomineeName: nominee.stageName || nominee.name,
-      voteType: 'paid',
-      voteCount,
-      voterPhoneHashed: hashPhoneNumber(cleanPhone),
-      voterPhoneMasked: maskPhoneNumber(cleanPhone),
-      voterPhoneRaw: consentedMarketing ? `+233${cleanPhone.slice(-9)}` : undefined,
-      consentedMarketing,
-      receiptCode,
-      transactionId: newTx.id,
-      amountPaidGhs: amountGhs,
-      feeGhs,
-      momoNetwork,
-      createdAt: new Date().toISOString(),
-    };
-
-    // Update Nominee tallies
-    nominee.voteCount += voteCount;
-    nominee.paidVoteCount += voteCount;
-    nominee.totalAmountGhs = (nominee.totalAmountGhs || 0) + amountGhs;
-
-    // Anomaly detection: check if > 3 bulk paid votes cast in last 60 seconds for same nominee
-    const oneMinAgo = Date.now() - 60000;
-    const recentVotesForNominee = this.votes.filter(
-      (v) => v.nomineeId === nomineeId && v.voteType === 'paid' && new Date(v.createdAt).getTime() > oneMinAgo
-    );
-    if (recentVotesForNominee.length >= 3) {
-      this.anomalies.unshift({
-        id: `anom-${Date.now()}`,
-        contestId,
-        contestTitle: contest.title,
-        nomineeId,
-        nomineeName: nominee.stageName || nominee.name,
-        reason: `Rapid vote burst: 4+ paid transactions in under 60 seconds on ${nominee.stageName || nominee.name}.`,
-        severity: 'high',
-        detectedAt: new Date().toISOString(),
-        resolved: false,
-      });
-      newVote.flaggedAnomaly = true;
-    }
-
-    this.transactions.unshift(newTx);
-    this.votes.unshift(newVote);
-    this.saveState();
-
-    return {
-      success: true,
-      message: `${voteCount} votes successfully cast for ${nominee.stageName || nominee.name}!`,
-      receipt: newVote,
-      transaction: newTx,
-    };
+    // Paid votes are credited only by the server after Paystack verifies the reference, amount, currency and metadata.
+    // Never call the privileged confirm_paystack_vote RPC from a browser client.
+    return { success: false, message: 'Paid vote confirmation is handled by secure Paystack server verification. Complete checkout and return to the confirmation page.' };
   }
 
   // Voter "My Votes" search
