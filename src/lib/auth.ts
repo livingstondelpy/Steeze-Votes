@@ -222,6 +222,14 @@ export async function signUpOrganizer(params: {
   }
 }
 
+export async function updateOrganizerPassword(password: string): Promise<{ success: boolean; message: string }> {
+  if (!isSupabaseConfigured()) return { success: false, message: 'Password update is unavailable because Supabase is not configured.' };
+  if (password.length < 8) return { success: false, message: 'Use a password with at least 8 characters.' };
+  const { error } = await supabase.auth.updateUser({ password });
+  if (error) return { success: false, message: 'Password could not be updated. Request a fresh reset email and try again.' };
+  return { success: true, message: 'Password updated. You can now sign in with your new password.' };
+}
+
 export async function sendOrganizerPasswordReset(email: string): Promise<{ success: boolean; message: string }> {
   if (!isSupabaseConfigured()) return { success: false, message: 'Password reset is unavailable because Supabase is not configured.' };
   const cleanEmail = email.trim().toLowerCase();
