@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Lock, ShieldCheck, AlertCircle, ArrowRight, Trophy } from 'lucide-react';
-import { store } from '../../lib/store';
+import { ShieldCheck, AlertCircle, ArrowRight } from 'lucide-react';
+import { signInAdmin } from '../../lib/auth';
 
 interface AdminLoginProps {
   onLoginSuccess: () => void;
@@ -11,16 +11,25 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onLoginSuccess, onBackTo
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setIsSubmitting(true);
 
-    const result = store.loginAdmin(email, password);
-    if (result.success) {
-      onLoginSuccess();
-    } else {
-      setError(result.message);
+    try {
+      const result = await signInAdmin(email, password);
+      if (result.success) {
+        setPassword('');
+        onLoginSuccess();
+      } else {
+        setError(result.message);
+      }
+    } catch {
+      setError('Unable to sign in right now. Please try again.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -41,17 +50,9 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onLoginSuccess, onBackTo
           </p>
         </div>
 
-        {/* Demo Credentials Helper Box */}
-        <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-800 space-y-1">
-          <div className="font-semibold flex items-center gap-1.5 text-slate-900">
-            <Lock className="w-3.5 h-3.5 text-rose-600" />
-            <span>Master Admin Login Credentials</span>
-          </div>
-          <p className="text-[11px] font-mono text-slate-600">
-            Email: <strong className="font-bold text-slate-900">admin@steezevotes.com</strong> <br />
-            Password: <strong className="font-bold text-slate-900">admin123</strong>
-          </p>
-        </div>
+        <p className="text-xs text-slate-500 text-center">
+          Sign in with an authorized administrator account. Access is verified against Supabase.
+        </p>
 
         {error && (
           <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-start gap-2">
@@ -71,7 +72,7 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onLoginSuccess, onBackTo
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="admin@steezevotes.com"
+              placeholder="Admin email address"
               className="w-full min-h-[44px] px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-rose-500 focus:bg-white transition-all font-mono text-slate-900"
             />
           </div>
@@ -92,9 +93,10 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onLoginSuccess, onBackTo
 
           <button
             type="submit"
-            className="w-full min-h-[44px] py-3 bg-slate-900 hover:bg-black text-white font-bold text-xs rounded-xl transition-colors shadow-2xs flex items-center justify-center gap-2 active:scale-98"
+            disabled={isSubmitting}
+            className="w-full min-h-[44px] py-3 bg-slate-900 hover:bg-black disabled:opacity-60 disabled:cursor-not-allowed text-white font-bold text-xs rounded-xl transition-colors shadow-2xs flex items-center justify-center gap-2 active:scale-98"
           >
-            <span>Sign In to Admin Portal</span>
+            <span>{isSubmitting ? 'Verifying access…' : 'Sign In to Admin Portal'}</span>
             <ArrowRight className="w-4 h-4" />
           </button>
         </form>
