@@ -1051,6 +1051,7 @@ class AppStore {
       try {
         const { error: contestError } = await supabase.from('contests').insert({
           id,
+          slug: contestData.slug || id,
           organizer_id: contestData.organizerId,
           title: contestData.title,
           description: contestData.description,
@@ -1064,9 +1065,11 @@ class AppStore {
           code_prefix: contestData.codePrefix || 'STZ',
           price_per_vote: safePricePerVote,
           show_public: contestData.showPublic ?? true,
+          show_public_results: contestData.showPublicResults ?? true,
           collect_voter_contacts: contestData.collectVoterContacts ?? false,
           status: contestData.status || 'pending_review',
           escrow_released: false,
+          terms_and_conditions: contestData.termsAndConditions || null,
           banner_order: contestData.bannerOrder || 1,
           featured: contestData.featured || false,
         });
@@ -1112,8 +1115,15 @@ class AppStore {
         if (updates.description !== undefined) dbUpdates.description = updates.description;
         if (updates.status !== undefined) dbUpdates.status = updates.status;
         if (updates.showPublic !== undefined) dbUpdates.show_public = updates.showPublic;
+        if (updates.showPublicResults !== undefined) dbUpdates.show_public_results = updates.showPublicResults;
+        if (updates.collectVoterContacts !== undefined) dbUpdates.collect_voter_contacts = updates.collectVoterContacts;
+        if (updates.slug !== undefined) dbUpdates.slug = updates.slug;
         if (updates.escrowReleased !== undefined) dbUpdates.escrow_released = updates.escrowReleased;
         if (updates.payoutStatus !== undefined) dbUpdates.payout_status = updates.payoutStatus;
+        if (updates.isLockedForAudit !== undefined) dbUpdates.is_locked_for_audit = updates.isLockedForAudit;
+        if (updates.termsAndConditions !== undefined) dbUpdates.terms_and_conditions = updates.termsAndConditions;
+        if (updates.disputeDeadline !== undefined) dbUpdates.dispute_deadline = updates.disputeDeadline;
+        if (updates.rejectionReason !== undefined) dbUpdates.rejection_reason = updates.rejectionReason;
         if (updates.bannerOrder !== undefined) dbUpdates.banner_order = updates.bannerOrder;
         if (updates.featured !== undefined) dbUpdates.featured = updates.featured;
 
@@ -1157,6 +1167,7 @@ class AppStore {
           id,
           contest_id: contestId,
           name: nomineeData.name,
+          stage_name: nomineeData.stageName || null,
           photo_url: nomineeData.photoUrl,
           bio: nomineeData.bio,
           voting_code: votingCode,
@@ -1226,6 +1237,7 @@ class AppStore {
     if (isSupabaseConfigured()) {
       const dbUpdates: Record<string, unknown> = {};
       if (updates.name !== undefined) dbUpdates.name = updates.name;
+      if (updates.stageName !== undefined) dbUpdates.stage_name = updates.stageName;
       if (updates.votingCode !== undefined || updates.nomineeCode !== undefined) dbUpdates.voting_code = updates.votingCode || updates.nomineeCode;
       if (updates.category !== undefined) dbUpdates.category = updates.category;
       if (updates.photoUrl !== undefined) dbUpdates.photo_url = updates.photoUrl;
