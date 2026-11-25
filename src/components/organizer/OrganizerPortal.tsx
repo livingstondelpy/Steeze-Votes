@@ -234,10 +234,10 @@ export const OrganizerPortal: React.FC<OrganizerPortalProps> = ({
       topNominee: spender.topNominee,
     }));
 
-  const handleRequestPayout = () => {
+  const handleRequestPayout = async () => {
     if (!activeContest) return;
-    const res = store.requestPayout(activeContest.id, currentOrg.id);
-    alert(res.message);
+    try { const res = await store.requestPayout(activeContest.id, currentOrg.id); alert(res.message); }
+    catch { alert('Payout request could not be saved. Please try again.'); }
   };
 
   const handleCreateContestSubmit = async (e: React.FormEvent) => {

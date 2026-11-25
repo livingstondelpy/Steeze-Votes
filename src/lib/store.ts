@@ -13,6 +13,8 @@ import {
   PayoutStatus 
 } from '../types';
 import { supabase, isSupabaseConfigured } from './supabase';
+
+const isProductionRuntime = () => (import.meta as any).env?.PROD === true;
 import { formatRpcVoteError } from './rpcErrors';
 
 // Simple deterministic hash for phone privacy and 1-free-vote enforcement
@@ -602,10 +604,10 @@ class AppStore {
         .order('banner_order', { ascending: true, nullsFirst: false })
         .order('created_at', { ascending: false });
 
-      if (!error && data && data.length > 0) {
+      if (!error && data) {
         this.contests = data.map((c: any) => ({
           id: c.id,
-          slug: c.slug,
+          slug: c.slug || c.id,
           organizerId: c.organizer_id,
           organizerName: c.organizers?.organization_name || 'Event Organizer',
           title: c.title,
@@ -628,7 +630,6 @@ class AppStore {
             discountPercentage: b.discount_percentage,
             badge: b.badge,
             popular: b.popular,
-            label: b.label || `${b.votes} Votes`,
             createdAt: b.created_at,
           })),
           showPublic: c.show_public ?? true,
@@ -661,7 +662,7 @@ class AppStore {
         query = query.eq('contest_id', contestId);
       }
       const { data, error } = await query;
-      if (!error && data && data.length > 0) {
+      if (!error && data) {
         const mapped = data.map((n: any) => ({
           id: n.id,
           contestId: n.contest_id,
@@ -693,6 +694,105 @@ class AppStore {
     } catch (err) {
       console.warn('Failed to load nominees from Supabase:', err);
     }
+  }
+
+  async fetchAdminDataFromSupabase(): Promise<void> {
+    if (!isSupabaseConfigured()) return;
+    await Promise.allSettled([this.fetchContestsFromSupabase(), this.fetchNomineesFromSupabase()]);
+    const [orgResult, txResult, anomalyResult, payoutResult, freeVoteResult] = await Promise.all([
+      supabase.from('organizers').select('id,email,organization_name,contact_phone,momo_number,momo_network,status,profile_picture_url,bio,created_at'),
+      supabase.from('transactions').select('id,reference,contest_id,nominee_id,vote_count,amount_ghs,fee_ghs,total_charged_ghs,organizer_revenue_ghs,rss_commission_ghs,voter_phone_hash,momo_network,status,receipt_code,paystack_reference,created_at').order('created_at', { ascending: false }),
+      supabase.from('anomalies').select('id,contest_id,nominee_id,reason,severity,reviewed,admin_notes,created_at'),
+      supabase.from('payout_requests').select('id,contest_id,organizer_id,gross_revenue_ghs,rss_fee_ghs,net_payout_ghs,status,momo_network,momo_number,momo_transaction_ref,requested_at,processed_at,admin_notes'),
+      supabase.from('free_vote_records').select('id,contest_id,nominee_id,phone_hash,voted_at').order('voted_at', { ascending: false }),
+    ]);
+
+    if (!orgResult.error && orgResult.data) {
+      this.organizers = orgResult.data.map((row: any) => ({
+        id: row.id, email: row.email, organizationName: row.organization_name,
+        contactPhone: row.contact_phone, momoNumber: row.momo_number, momoNetwork: row.momo_network,
+        status: row.status, profilePictureUrl: row.profile_picture_url || undefined,
+        bio: row.bio || undefined, createdAt: row.created_at,
+      }));
+    }
+    if (!txResult.error && txResult.data) {
+      this.transactions = txResult.data.map((row: any) => ({
+        id: row.id, reference: row.reference, contestId: row.contest_id, nomineeId: row.nominee_id,
+        nomineeName: this.nominees.find((n) => n.id === row.nominee_id)?.stageName || this.nominees.find((n) => n.id === row.nominee_id)?.name,
+        voteCount: Number(row.vote_count), amountGhs: Number(row.amount_ghs), feeGhs: Number(row.fee_ghs),
+        totalChargedGhs: Number(row.total_charged_ghs), organizerRevenueGhs: Number(row.organizer_revenue_ghs),
+        rssCommissionGhs: Number(row.rss_commission_ghs), momoNetwork: row.momo_network, status: row.status,
+        receiptCode: row.receipt_code, paystackReference: row.paystack_reference || undefined, createdAt: row.created_at,
+      }));
+    }
+    if (!anomalyResult.error && anomalyResult.data) {
+      this.anomalies = anomalyResult.data.map((row: any) => ({
+        id: row.id, contestId: row.contest_id, contestTitle: this.contests.find((c) => c.id === row.contest_id)?.title,
+        nomineeId: row.nominee_id || undefined, nomineeName: this.nominees.find((n) => n.id === row.nominee_id)?.name,
+        reason: row.reason, severity: row.severity, resolved: Boolean(row.reviewed),
+        actionTaken: row.admin_notes || undefined, detectedAt: row.created_at,
+      }));
+    }
+    if (!payoutResult.error && payoutResult.data) {
+      this.payoutRequests = payoutResult.data.map((row: any) => ({
+        id: row.id, contestId: row.contest_id, contestTitle: this.contests.find((c) => c.id === row.contest_id)?.title,
+        organizerId: row.organizer_id, organizerName: this.organizers.find((o) => o.id === row.organizer_id)?.organizationName,
+        grossRevenueGhs: Number(row.gross_revenue_ghs), rssFeeGhs: Number(row.rss_fee_ghs), netPayoutGhs: Number(row.net_payout_ghs),
+        status: row.status, momoNetwork: row.momo_network, momoNumber: row.momo_number,
+        momoTransactionRef: row.momo_transaction_ref || undefined, requestedAt: row.requested_at,
+        processedAt: row.processed_at || undefined, adminNotes: row.admin_notes || undefined,
+      }));
+    }
+    if (!txResult.error && txResult.data && !freeVoteResult.error && freeVoteResult.data) {
+      const paidVotes: VoteRecord[] = this.transactions.map((tx) => ({
+        id: tx.id, contestId: tx.contestId, contestTitle: this.contests.find((c) => c.id === tx.contestId)?.title,
+        nomineeId: tx.nomineeId, nomineeName: tx.nomineeName, voteType: 'paid', voteCount: tx.voteCount,
+        voterPhoneHashed: (txResult.data as any[]).find((row) => row.id === tx.id)?.voter_phone_hash || undefined,
+        receiptCode: tx.receiptCode, transactionId: tx.id, amountPaidGhs: tx.amountGhs, feeGhs: tx.feeGhs,
+        momoNetwork: tx.momoNetwork, createdAt: tx.createdAt,
+      }));
+      const freeVotes: VoteRecord[] = freeVoteResult.data.map((row: any) => ({
+        id: row.id, contestId: row.contest_id, contestTitle: this.contests.find((c) => c.id === row.contest_id)?.title,
+        nomineeId: row.nominee_id, nomineeName: this.nominees.find((n) => n.id === row.nominee_id)?.name,
+        voteType: 'free', voteCount: 1, voterPhoneHashed: row.phone_hash, receiptCode: '',
+        amountPaidGhs: 0, feeGhs: 0, createdAt: row.voted_at,
+      }));
+      this.votes = [...paidVotes, ...freeVotes].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    }
+    this.saveState();
+  }
+
+  async fetchOrganizerDataFromSupabase(organizerId: string): Promise<void> {
+    if (!isSupabaseConfigured()) return;
+    await Promise.allSettled([this.fetchContestsFromSupabase(), this.fetchNomineesFromSupabase()]);
+    const contestIds = this.contests.filter((c) => c.organizerId === organizerId).map((c) => c.id);
+    const txQuery = contestIds.length
+      ? supabase.from('organizer_transactions_view').select('*').in('contest_id', contestIds).order('created_at', { ascending: false })
+      : Promise.resolve({ data: [], error: null });
+    const [txResult, payoutResult] = await Promise.all([
+      txQuery,
+      supabase.from('payout_requests').select('id,contest_id,organizer_id,gross_revenue_ghs,rss_fee_ghs,net_payout_ghs,status,momo_network,momo_number,momo_transaction_ref,requested_at,processed_at,admin_notes').eq('organizer_id', organizerId),
+    ]);
+    if (!txResult.error && txResult.data) {
+      this.transactions = txResult.data.map((row: any) => ({
+        id: row.id, reference: row.reference || '', contestId: row.contest_id, nomineeId: row.nominee_id,
+        nomineeName: row.nominee_name, voteCount: Number(row.vote_count), amountGhs: Number(row.amount_ghs),
+        feeGhs: 0, totalChargedGhs: Number(row.amount_ghs), organizerRevenueGhs: Number(row.organizer_revenue_ghs),
+        rssCommissionGhs: 0, momoNetwork: 'MTN', status: row.status, receiptCode: row.receipt_code || '',
+        createdAt: row.created_at,
+      }));
+    }
+    if (!payoutResult.error && payoutResult.data) {
+      this.payoutRequests = payoutResult.data.map((row: any) => ({
+        id: row.id, contestId: row.contest_id, contestTitle: this.contests.find((c) => c.id === row.contest_id)?.title,
+        organizerId: row.organizer_id, organizerName: this.organizers.find((o) => o.id === row.organizer_id)?.organizationName,
+        grossRevenueGhs: Number(row.gross_revenue_ghs), rssFeeGhs: Number(row.rss_fee_ghs), netPayoutGhs: Number(row.net_payout_ghs),
+        status: row.status, momoNetwork: row.momo_network, momoNumber: row.momo_number,
+        momoTransactionRef: row.momo_transaction_ref || undefined, requestedAt: row.requested_at,
+        processedAt: row.processed_at || undefined, adminNotes: row.admin_notes || undefined,
+      }));
+    }
+    this.saveState();
   }
 
   /**
@@ -746,6 +846,21 @@ class AppStore {
   }
 
   private loadState() {
+    // In production, Supabase is the source of truth. Never hydrate the live app
+    // with bundled demo contests, votes, organizers, payouts or browser-cached
+    // transaction data when the backend is configured.
+    if (isSupabaseConfigured() || isProductionRuntime()) {
+      this.organizers = [];
+      this.contests = [];
+      this.nominees = [];
+      this.votes = [];
+      this.transactions = [];
+      this.anomalies = [];
+      this.payoutRequests = [];
+      this.lowDataMode = false;
+      return;
+    }
+
     try {
       const savedOrganizers = localStorage.getItem('steeze_organizers');
       const savedContests = localStorage.getItem('steeze_contests');
@@ -810,8 +925,15 @@ class AppStore {
     this.saveState();
   }
 
-  // OTP Handling (Rate limited, 6-digit SMS simulation)
+  // OTP Handling. The in-memory OTP below is development-only and must never
+  // be presented as a real SMS verification flow in a configured deployment.
   sendOtp(phone: string, contestId: string): { success: boolean; message: string; simulatedOtp?: string } {
+    if (isSupabaseConfigured() || isProductionRuntime()) {
+      return {
+        success: false,
+        message: 'Phone verification is not available yet. Please try again later.',
+      };
+    }
     const cleanPhone = (phone || '').replace(/[^0-9]/g, '');
     if (cleanPhone.length < 9) {
       return { success: false, message: 'Please enter a valid 9 or 10 digit Ghanaian phone number.' };
@@ -883,7 +1005,7 @@ class AppStore {
     // Call Supabase RPC cast_free_vote if connected
     if (isSupabaseConfigured()) {
       try {
-        const { error } = await supabase.rpc('cast_free_vote', {
+        const { data, error } = await supabase.rpc('cast_free_vote', {
           p_contest_id: contestId,
           p_nominee_id: nomineeId,
           p_phone: cleanPhone.startsWith('233') ? `+${cleanPhone}` : `+233${cleanPhone.slice(-9)}`,
@@ -891,6 +1013,12 @@ class AppStore {
 
         if (error) {
           return { success: false, message: formatRpcVoteError(error) };
+        }
+        if (!data || data.success !== true) {
+          return {
+            success: false,
+            message: typeof data?.error === 'string' ? data.error : 'The vote was not accepted by the voting server.',
+          };
         }
       } catch (rpcErr: any) {
         return { success: false, message: formatRpcVoteError(rpcErr) };
@@ -937,131 +1065,13 @@ class AppStore {
     return { success: true, message: 'Free verified vote cast successfully!', receipt: newVote };
   }
 
-  async processPaidVote(params: {
-    contestId: string;
-    nomineeId: string;
-    voteCount: number;
-    amountGhs: number;
-    voterPhone: string;
-    momoNetwork: MomoNetwork;
-    consentedMarketing: boolean;
-    paystackReference?: string;
+  async processPaidVote(_params: {
+    contestId: string; nomineeId: string; voteCount: number; amountGhs: number;
+    voterPhone: string; momoNetwork: MomoNetwork; consentedMarketing: boolean; paystackReference?: string;
   }): Promise<{ success: boolean; message: string; receipt?: VoteRecord; transaction?: Transaction }> {
-    const { contestId, nomineeId, voteCount, amountGhs, voterPhone, momoNetwork, consentedMarketing, paystackReference } = params;
-    const cleanPhone = (voterPhone || '').replace(/[^0-9]/g, '');
-
-    const contest = this.contests.find((c) => c.id === contestId);
-    const nominee = this.nominees.find((n) => n.id === nomineeId);
-
-    if (!contest || !nominee) {
-      return { success: false, message: 'Invalid contest or nominee.' };
-    }
-
-    if (contest.status !== 'active') {
-      return { success: false, message: 'Voting is currently paused or has ended for this contest.' };
-    }
-
-    const feeGhs = calculatePaystackFee(amountGhs);
-    const totalCharged = +(amountGhs + feeGhs).toFixed(2);
-    
-    // Commission from platform_settings (default_commission_rate = 0.10)
-    const commissionRate = this.systemSettings.defaultCommissionRate || 0.10;
-    const rssCommission = +(amountGhs * commissionRate).toFixed(2);
-    const organizerRevenue = +(amountGhs * (1 - commissionRate)).toFixed(2);
-
-    const receiptCode = generateReceiptCode();
-    const reference = paystackReference || `PAYSTACK-${receiptCode}-${Date.now()}`;
-
-    // If Supabase is configured, call confirm_paystack_vote RPC
-    if (isSupabaseConfigured()) {
-      try {
-        const { error: rpcError } = await supabase.rpc('confirm_paystack_vote', {
-          p_paystack_reference: reference,
-        });
-
-        if (rpcError) {
-          console.warn('confirm_paystack_vote RPC notice:', rpcError.message);
-        }
-      } catch (err) {
-        console.warn('Supabase confirm_paystack_vote RPC execution warning:', err);
-      }
-    }
-
-    const newTx: Transaction = {
-      id: `tx-${Date.now()}`,
-      reference,
-      contestId,
-      nomineeId,
-      nomineeName: nominee.stageName || nominee.name,
-      voteCount,
-      amountGhs,
-      feeGhs,
-      totalChargedGhs: totalCharged,
-      organizerRevenueGhs: organizerRevenue,
-      rssCommissionGhs: rssCommission,
-      voterPhone: cleanPhone,
-      momoNetwork,
-      status: 'success',
-      receiptCode,
-      paystackReference,
-      createdAt: new Date().toISOString(),
-    };
-
-    const newVote: VoteRecord = {
-      id: `vote-paid-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-      contestId,
-      contestTitle: contest.title,
-      nomineeId,
-      nomineeName: nominee.stageName || nominee.name,
-      voteType: 'paid',
-      voteCount,
-      voterPhoneHashed: hashPhoneNumber(cleanPhone),
-      voterPhoneMasked: maskPhoneNumber(cleanPhone),
-      voterPhoneRaw: consentedMarketing ? `+233${cleanPhone.slice(-9)}` : undefined,
-      consentedMarketing,
-      receiptCode,
-      transactionId: newTx.id,
-      amountPaidGhs: amountGhs,
-      feeGhs,
-      momoNetwork,
-      createdAt: new Date().toISOString(),
-    };
-
-    // Update Nominee tallies
-    nominee.voteCount += voteCount;
-    nominee.paidVoteCount += voteCount;
-    nominee.totalAmountGhs = (nominee.totalAmountGhs || 0) + amountGhs;
-
-    // Anomaly detection: check if > 3 bulk paid votes cast in last 60 seconds for same nominee
-    const oneMinAgo = Date.now() - 60000;
-    const recentVotesForNominee = this.votes.filter(
-      (v) => v.nomineeId === nomineeId && v.voteType === 'paid' && new Date(v.createdAt).getTime() > oneMinAgo
-    );
-    if (recentVotesForNominee.length >= 3) {
-      this.anomalies.unshift({
-        id: `anom-${Date.now()}`,
-        contestId,
-        contestTitle: contest.title,
-        nomineeId,
-        nomineeName: nominee.stageName || nominee.name,
-        reason: `Rapid vote burst: 4+ paid transactions in under 60 seconds on ${nominee.stageName || nominee.name}.`,
-        severity: 'high',
-        detectedAt: new Date().toISOString(),
-        resolved: false,
-      });
-      newVote.flaggedAnomaly = true;
-    }
-
-    this.transactions.unshift(newTx);
-    this.votes.unshift(newVote);
-    this.saveState();
-
-    return {
-      success: true,
-      message: `${voteCount} votes successfully cast for ${nominee.stageName || nominee.name}!`,
-      receipt: newVote,
-      transaction: newTx,
-    };
+    // Paid votes are credited only by the server after Paystack verifies the reference, amount, currency and metadata.
+    // Never call the privileged confirm_paystack_vote RPC from a browser client.
+    return { success: false, message: 'Paid vote confirmation is handled by secure Paystack server verification. Complete checkout and return to the confirmation page.' };
   }
 
   // Voter "My Votes" search
@@ -1119,7 +1129,7 @@ class AppStore {
 
   // Organizer contest creation & management
   async createContest(contestData: Omit<Contest, 'id' | 'createdAt' | 'updatedAt' | 'escrowReleased'>): Promise<Contest> {
-    const id = `contest-${Date.now()}`;
+    const id = crypto.randomUUID();
     // Free contests must store NULL in price_per_vote
     const safePricePerVote = contestData.contestType === 'free' ? null : contestData.pricePerVote;
 
@@ -1134,7 +1144,8 @@ class AppStore {
       updatedAt: new Date().toISOString(),
     };
 
-    // If Supabase is connected, write contest and bundle tiers to separate tables
+    if (isProductionRuntime() && !isSupabaseConfigured()) throw new Error('Database configuration is required to create contests.');
+    // Persist to Supabase before publishing the new contest in application state.
     if (isSupabaseConfigured()) {
       try {
         const { error: contestError } = await supabase.from('contests').insert({
@@ -1153,6 +1164,7 @@ class AppStore {
           code_prefix: contestData.codePrefix || 'STZ',
           price_per_vote: safePricePerVote,
           show_public: contestData.showPublic ?? true,
+          show_public_results: contestData.showPublicResults ?? true,
           collect_voter_contacts: contestData.collectVoterContacts ?? false,
           status: contestData.status || 'pending_review',
           escrow_released: false,
@@ -1161,9 +1173,7 @@ class AppStore {
           featured: contestData.featured || false,
         });
 
-        if (contestError) {
-          console.error('Failed to insert contest into Supabase:', contestError);
-        }
+        if (contestError) throw contestError;
 
         // Insert bundle tiers into public.bundle_tiers separate table
         if (contestData.contestType === 'paid' && contestData.bundleTiers && contestData.bundleTiers.length > 0) {
@@ -1180,11 +1190,13 @@ class AppStore {
 
           const { error: bundleError } = await supabase.from('bundle_tiers').insert(bundleRows);
           if (bundleError) {
-            console.error('Failed to insert bundle tiers into Supabase:', bundleError);
+            await supabase.from('contests').delete().eq('id', id);
+            throw bundleError;
           }
         }
       } catch (err) {
         console.error('Supabase contest creation error:', err);
+        throw new Error('Contest could not be saved to the database.');
       }
     }
 
@@ -1194,14 +1206,7 @@ class AppStore {
   }
 
   async updateContest(contestId: string, updates: Partial<Contest>) {
-    this.contests = this.contests.map((c) => {
-      if (c.id === contestId) {
-        return { ...c, ...updates, updatedAt: new Date().toISOString() };
-      }
-      return c;
-    });
-    this.saveState();
-
+    if (isProductionRuntime() && !isSupabaseConfigured()) throw new Error('Database configuration is required to update contests.');
     if (isSupabaseConfigured()) {
       try {
         const dbUpdates: any = {};
@@ -1209,25 +1214,34 @@ class AppStore {
         if (updates.description !== undefined) dbUpdates.description = updates.description;
         if (updates.status !== undefined) dbUpdates.status = updates.status;
         if (updates.showPublic !== undefined) dbUpdates.show_public = updates.showPublic;
-        if (updates.isLockedForAudit !== undefined) dbUpdates.is_locked_for_audit = updates.isLockedForAudit;
+        if (updates.showPublicResults !== undefined) dbUpdates.show_public_results = updates.showPublicResults;
+        if (updates.collectVoterContacts !== undefined) dbUpdates.collect_voter_contacts = updates.collectVoterContacts;
+        if (updates.slug !== undefined) dbUpdates.slug = updates.slug;
         if (updates.escrowReleased !== undefined) dbUpdates.escrow_released = updates.escrowReleased;
         if (updates.payoutStatus !== undefined) dbUpdates.payout_status = updates.payoutStatus;
+        if (updates.isLockedForAudit !== undefined) dbUpdates.is_locked_for_audit = updates.isLockedForAudit;
         if (updates.termsAndConditions !== undefined) dbUpdates.terms_and_conditions = updates.termsAndConditions;
+        if (updates.disputeDeadline !== undefined) dbUpdates.dispute_deadline = updates.disputeDeadline;
+        if (updates.rejectionReason !== undefined) dbUpdates.rejection_reason = updates.rejectionReason;
         if (updates.bannerOrder !== undefined) dbUpdates.banner_order = updates.bannerOrder;
         if (updates.featured !== undefined) dbUpdates.featured = updates.featured;
 
-        await supabase.from('contests').update(dbUpdates).eq('id', contestId);
+        const { error } = await supabase.from('contests').update(dbUpdates).eq('id', contestId);
+        if (error) throw error;
       } catch (err) {
         console.warn('Failed to update contest in Supabase:', err);
+        throw new Error('Contest update failed to save to the database.');
       }
     }
+    this.contests = this.contests.map((c) => c.id === contestId ? { ...c, ...updates, updatedAt: new Date().toISOString() } : c);
+    this.saveState();
   }
 
   async addNominee(
     contestId: string, 
     nomineeData: Omit<Nominee, 'id' | 'contestId' | 'voteCount' | 'paidVoteCount' | 'freeVoteCount' | 'createdAt'>
   ): Promise<Nominee> {
-    const id = `nom-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
+    const id = crypto.randomUUID();
     const votingCode = nomineeData.votingCode || nomineeData.nomineeCode || `NOM-${Math.floor(100 + Math.random() * 900)}`;
 
     const newNominee: Nominee = {
@@ -1245,9 +1259,10 @@ class AppStore {
       createdAt: new Date().toISOString(),
     };
 
+    if (isProductionRuntime() && !isSupabaseConfigured()) throw new Error('Database configuration is required to add nominees.');
     if (isSupabaseConfigured()) {
       try {
-        await supabase.from('nominees').insert({
+        const { error } = await supabase.from('nominees').insert({
           id,
           contest_id: contestId,
           name: nomineeData.name,
@@ -1258,8 +1273,10 @@ class AppStore {
           category: nomineeData.category || 'General',
           status: nomineeData.status || 'active',
         });
+        if (error) throw error;
       } catch (err) {
         console.error('Failed to insert nominee into Supabase:', err);
+        throw new Error('Nominee could not be saved to the database.');
       }
     }
 
@@ -1269,47 +1286,28 @@ class AppStore {
   }
 
   async deleteNominee(nomineeId: string) {
+    if (isProductionRuntime() && !isSupabaseConfigured()) throw new Error('Database configuration is required to delete nominees.');
+    if (isSupabaseConfigured()) {
+      const { error } = await supabase.from('nominees').delete().eq('id', nomineeId);
+      if (error) throw new Error('Nominee could not be deleted from the database.');
+    }
     this.nominees = this.nominees.filter((n) => n.id !== nomineeId);
     this.saveState();
-
-    if (isSupabaseConfigured()) {
-      try {
-        await supabase.from('nominees').delete().eq('id', nomineeId);
-      } catch (err) {
-        console.warn('Failed to delete nominee from Supabase:', err);
-      }
-    }
   }
 
   // Admin Settings & Content Moderation
   async updateSystemSettings(updates: Partial<PlatformSettings>) {
+    if (isProductionRuntime() && !isSupabaseConfigured()) throw new Error('Database configuration is required to save platform settings.');
+    if (isSupabaseConfigured()) {
+      const writes: PromiseLike<any>[] = [];
+      if (updates.defaultCommissionRate !== undefined) writes.push(supabase.from('platform_settings').upsert({ key: 'default_commission_rate', value: updates.defaultCommissionRate }));
+      if (updates.maxActiveContestsPerOrganizer !== undefined) writes.push(supabase.from('platform_settings').upsert({ key: 'max_active_contests_per_organizer', value: updates.maxActiveContestsPerOrganizer }));
+      if (updates.maintenanceMode !== undefined) writes.push(supabase.from('platform_settings').upsert({ key: 'maintenance_mode', value: updates.maintenanceMode }));
+      const results = await Promise.all(writes);
+      if (results.some((result: any) => result.error)) throw new Error('Platform settings could not be saved to the database.');
+    }
     this.systemSettings = { ...this.systemSettings, ...updates };
     this.saveState();
-
-    if (isSupabaseConfigured()) {
-      try {
-        if (updates.defaultCommissionRate !== undefined) {
-          await supabase.from('platform_settings').upsert({
-            key: 'default_commission_rate',
-            value: updates.defaultCommissionRate,
-          });
-        }
-        if (updates.maxActiveContestsPerOrganizer !== undefined) {
-          await supabase.from('platform_settings').upsert({
-            key: 'max_active_contests_per_organizer',
-            value: updates.maxActiveContestsPerOrganizer,
-          });
-        }
-        if (updates.maintenanceMode !== undefined) {
-          await supabase.from('platform_settings').upsert({
-            key: 'maintenance_mode',
-            value: updates.maintenanceMode,
-          });
-        }
-      } catch (err) {
-        console.warn('Failed to update platform_settings in Supabase:', err);
-      }
-    }
   }
 
   approveContest(contestId: string) {
@@ -1320,27 +1318,41 @@ class AppStore {
     this.updateContest(contestId, { status: 'draft', rejectionReason: reason });
   }
 
-  updateOrganizerProfile(organizerId: string, updates: { profilePictureUrl?: string; bio?: string }) {
-    this.organizers = this.organizers.map((o) => {
-      if (o.id === organizerId) {
-        return { ...o, ...updates };
-      }
-      return o;
-    });
+  async updateOrganizerProfile(organizerId: string, updates: { profilePictureUrl?: string; bio?: string }) {
+    if (isProductionRuntime() && !isSupabaseConfigured()) throw new Error('Database configuration is required to update organizer profiles.');
+    if (isSupabaseConfigured()) {
+      const dbUpdates: Record<string, unknown> = {};
+      if (updates.profilePictureUrl !== undefined) dbUpdates.profile_picture_url = updates.profilePictureUrl;
+      if (updates.bio !== undefined) dbUpdates.bio = updates.bio;
+      const { error } = await supabase.from('organizers').update(dbUpdates).eq('id', organizerId);
+      if (error) throw new Error('Organizer profile could not be saved.');
+    }
+    this.organizers = this.organizers.map((o) => o.id === organizerId ? { ...o, ...updates } : o);
     this.saveState();
   }
 
-  updateNominee(nomineeId: string, updates: Partial<Nominee>) {
-    this.nominees = this.nominees.map((n) => {
-      if (n.id === nomineeId) {
-        return { ...n, ...updates };
-      }
-      return n;
-    });
+  async updateNominee(nomineeId: string, updates: Partial<Nominee>) {
+    if (isProductionRuntime() && !isSupabaseConfigured()) throw new Error('Database configuration is required to update nominees.');
+    if (isSupabaseConfigured()) {
+      const dbUpdates: Record<string, unknown> = {};
+      if (updates.name !== undefined) dbUpdates.name = updates.name;
+      if (updates.stageName !== undefined) dbUpdates.stage_name = updates.stageName;
+      if (updates.votingCode !== undefined || updates.nomineeCode !== undefined) dbUpdates.voting_code = updates.votingCode || updates.nomineeCode;
+      if (updates.category !== undefined) dbUpdates.category = updates.category;
+      if (updates.photoUrl !== undefined) dbUpdates.photo_url = updates.photoUrl;
+      if (updates.bio !== undefined) dbUpdates.bio = updates.bio;
+      if (updates.status !== undefined) dbUpdates.status = updates.status;
+      const { error } = await supabase.from('nominees').update(dbUpdates).eq('id', nomineeId);
+      if (error) throw new Error('Nominee changes could not be saved.');
+    }
+    this.nominees = this.nominees.map((n) => n.id === nomineeId ? { ...n, ...updates } : n);
     this.saveState();
   }
 
   reconcilePayment(transactionId: string): { success: boolean; message: string } {
+    if (isSupabaseConfigured() || isProductionRuntime()) {
+      return { success: false, message: 'Payments can only be reconciled by the trusted server after Paystack verification.' };
+    }
     const tx = this.transactions.find((t) => t.id === transactionId);
     if (!tx) {
       return { success: false, message: 'Transaction reference not found.' };
@@ -1390,13 +1402,13 @@ class AppStore {
   }
 
   // Anomaly & Admin Controls
-  resolveAnomaly(anomalyId: string, actionTaken: string) {
-    this.anomalies = this.anomalies.map((a) => {
-      if (a.id === anomalyId) {
-        return { ...a, resolved: true, actionTaken };
-      }
-      return a;
-    });
+  async resolveAnomaly(anomalyId: string, actionTaken: string) {
+    if (isProductionRuntime() && !isSupabaseConfigured()) throw new Error('Database configuration is required to resolve anomalies.');
+    if (isSupabaseConfigured()) {
+      const { error } = await supabase.from('anomalies').update({ reviewed: true, admin_notes: actionTaken, reviewed_at: new Date().toISOString() }).eq('id', anomalyId);
+      if (error) throw new Error('Anomaly resolution could not be saved.');
+    }
+    this.anomalies = this.anomalies.map((item) => item.id === anomalyId ? { ...item, resolved: true, actionTaken } : item);
     this.saveState();
   }
 
@@ -1417,83 +1429,62 @@ class AppStore {
   }
 
   // Payout Management Methods
-  requestPayout(contestId: string, organizerId: string): { success: boolean; message: string; payout?: PayoutRequest } {
+  async requestPayout(contestId: string, organizerId: string): Promise<{ success: boolean; message: string; payout?: PayoutRequest }> {
     const contest = this.contests.find((c) => c.id === contestId);
-    if (!contest) {
-      return { success: false, message: 'Contest not found.' };
-    }
-
+    if (!contest) return { success: false, message: 'Contest not found.' };
     const org = this.organizers.find((o) => o.id === organizerId);
-    if (!org) {
-      return { success: false, message: 'Organizer record not found.' };
-    }
-
-    // Check if contest has ended
+    if (!org) return { success: false, message: 'Organizer record not found.' };
     const isEnded = new Date(contest.endDate).getTime() <= Date.now() || contest.status === 'ended' || contest.status === 'settled';
-    if (!isEnded) {
-      return { success: false, message: 'Payout requests can only be submitted after the contest voting window has ended.' };
+    if (!isEnded) return { success: false, message: 'Payout requests can only be submitted after the contest voting window has ended.' };
+    if (isProductionRuntime() && !isSupabaseConfigured()) return { success: false, message: 'Payout storage is not configured. No request was created.' };
+    let grossGmv = 0;
+    if (isSupabaseConfigured()) {
+      const { data: existingRows, error: existingError } = await supabase.from('payout_requests').select('id,status').eq('contest_id', contestId).in('status', ['pending', 'processing', 'paid']);
+      if (existingError) return { success: false, message: 'Could not check existing payout requests.' };
+      if (existingRows?.length) return { success: false, message: `A payout request is already ${existingRows[0].status} for this contest.` };
+      const { data: txRows, error: txError } = await supabase.from('organizer_transactions_view').select('amount_ghs').eq('contest_id', contestId).eq('status', 'success');
+      if (txError) return { success: false, message: 'Could not calculate verified contest revenue.' };
+      grossGmv = (txRows || []).reduce((sum: number, row: any) => sum + Number(row.amount_ghs || 0), 0);
+    } else {
+      const existing = this.payoutRequests.find((p) => p.contestId === contestId && ['pending', 'processing', 'paid'].includes(p.status));
+      if (existing) return { success: false, message: `A payout request is already ${existing.status} for this contest.` };
+      grossGmv = this.transactions.filter((t) => t.contestId === contestId && t.status === 'success').reduce((sum, t) => sum + t.amountGhs, 0);
     }
-
-    // Check if payout already exists
-    const existing = this.payoutRequests.find((p) => p.contestId === contestId && (p.status === 'pending' || p.status === 'processing' || p.status === 'paid'));
-    if (existing) {
-      return { success: false, message: `A payout request is already ${existing.status} for this contest.` };
-    }
-
-    const contestTxs = this.transactions.filter((t) => t.contestId === contestId && t.status === 'success');
-    const grossGmv = contestTxs.reduce((sum, t) => sum + t.amountGhs, 0);
     const commissionRate = this.systemSettings.defaultCommissionRate || 0.10;
     const rssFee = +(grossGmv * commissionRate).toFixed(2);
     const netPayout = +(grossGmv * (1 - commissionRate)).toFixed(2);
-
-    const newPayout: PayoutRequest = {
-      id: `pay-req-${Date.now()}`,
-      contestId: contest.id,
-      contestTitle: contest.title,
-      organizerId: org.id,
-      organizerName: org.organizationName,
-      momoNetwork: org.momoNetwork || 'MTN',
-      momoNumber: org.momoNumber || org.contactPhone,
-      grossRevenueGhs: grossGmv,
-      rssFeeGhs: rssFee,
-      netPayoutGhs: netPayout,
-      status: 'pending',
-      requestedAt: new Date().toISOString(),
-      adminNotes: 'Submitted by organizer for 24-hour review.',
-    };
-
+    const id = crypto.randomUUID();
+    const newPayout: PayoutRequest = { id, contestId: contest.id, contestTitle: contest.title, organizerId: org.id, organizerName: org.organizationName, momoNetwork: org.momoNetwork || 'MTN', momoNumber: org.momoNumber || org.contactPhone, grossRevenueGhs: grossGmv, rssFeeGhs: rssFee, netPayoutGhs: netPayout, status: 'pending', requestedAt: new Date().toISOString(), adminNotes: 'Submitted by organizer for review.' };
+    if (isSupabaseConfigured()) {
+      const { error } = await supabase.from('payout_requests').insert({ id, contest_id: contest.id, organizer_id: org.id, gross_revenue_ghs: grossGmv, rss_fee_ghs: rssFee, net_payout_ghs: netPayout, status: 'pending', momo_network: org.momoNetwork || 'MTN', momo_number: org.momoNumber || org.contactPhone, held_for_dispute: false });
+      if (error) return { success: false, message: 'Payout request could not be saved. No request was created.' };
+    }
     this.payoutRequests.unshift(newPayout);
-    this.updateContest(contestId, { payoutStatus: 'pending' });
+    await this.updateContest(contestId, { payoutStatus: 'pending' });
     this.saveState();
-
-    return { 
-      success: true, 
-      message: `Payout request of GHS ${netPayout.toFixed(2)} submitted successfully to your ${org.momoNetwork} MoMo wallet.`, 
-      payout: newPayout 
-    };
+    return { success: true, message: `Payout request of GHS ${netPayout.toFixed(2)} submitted for review.`, payout: newPayout };
   }
 
-  updatePayoutStatus(
-    payoutId: string, 
-    status: PayoutStatus, 
-    momoTransactionRef?: string, 
-    adminNotes?: string
-  ) {
-    const payout = this.payoutRequests.find((p) => p.id === payoutId);
-    if (!payout) return;
-
+  async updatePayoutStatus(payoutId: string, status: PayoutStatus, momoTransactionRef?: string, adminNotes?: string) {
+    const payout = this.payoutRequests.find((item) => item.id === payoutId);
+    if (!payout) throw new Error('Payout request not found.');
+    if (isProductionRuntime() && !isSupabaseConfigured()) throw new Error('Database configuration is required to update payouts.');
+    if (isSupabaseConfigured()) {
+      const dbUpdates: Record<string, unknown> = { status };
+      if (momoTransactionRef) dbUpdates.momo_transaction_ref = momoTransactionRef;
+      if (adminNotes) dbUpdates.admin_notes = adminNotes;
+      if (status === 'paid') dbUpdates.processed_at = new Date().toISOString();
+      const { error } = await supabase.from('payout_requests').update(dbUpdates).eq('id', payoutId);
+      if (error) throw new Error('Payout status could not be saved.');
+    }
     payout.status = status;
-    if (momoTransactionRef) {
-      payout.momoTransactionRef = momoTransactionRef;
-    }
-    if (adminNotes) {
-      payout.adminNotes = adminNotes;
-    }
+    if (momoTransactionRef) payout.momoTransactionRef = momoTransactionRef;
+    if (adminNotes) payout.adminNotes = adminNotes;
     if (status === 'paid') {
       payout.processedAt = new Date().toISOString();
-      this.updateContest(payout.contestId, { escrowReleased: true, payoutStatus: 'paid', status: 'settled' });
+      await this.updateContest(payout.contestId, { escrowReleased: true, payoutStatus: 'paid', status: 'settled' });
     } else {
-      this.updateContest(payout.contestId, { payoutStatus: status });
+      await this.updateContest(payout.contestId, { payoutStatus: status });
     }
     this.saveState();
   }
@@ -1511,22 +1502,17 @@ class AppStore {
   }
 
   // Admin & Organizer Authentication Methods
-  loginAdmin(email: string, password: string): { success: boolean; message: string } {
-    const cleanEmail = (email || '').trim().toLowerCase();
-    const cleanPass = (password || '').trim();
-
-    const validAdminEmails = ['admin@steezevotes.com', 'rssadmin@steezevotes.com', 'events@rootedsteeze.com'];
-    const validAdminPasswords = ['admin123', 'rss2026'];
-
-    if (validAdminEmails.includes(cleanEmail) && validAdminPasswords.includes(cleanPass)) {
-      return { success: true, message: 'Admin authentication successful.' };
-    }
-
-    return { success: false, message: 'Invalid admin email or password. Access denied.' };
+  loginAdmin(_email: string, _password: string): { success: boolean; message: string } {
+    // Authentication must use Supabase Auth and the database admin role.
+    return { success: false, message: 'Use the secure administrator sign-in service.' };
   }
 
-  loginOrganizer(email: string, password: string): { success: boolean; message: string; organizer?: OrganizerAccount } {
-    const cleanEmail = (email || '').trim().toLowerCase();
+  loginOrganizer(_email: string, _password: string): { success: boolean; message: string; organizer?: OrganizerAccount } {
+    if (isSupabaseConfigured() || isProductionRuntime()) {
+      return { success: false, message: 'Organizer sign-in must use Supabase Auth.' };
+    }
+    const cleanEmail = (_email || '').trim().toLowerCase();
+    const password = _password;
     const cleanPass = (password || '').trim();
 
     if (!cleanEmail || !cleanPass) {

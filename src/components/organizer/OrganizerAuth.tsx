@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { UserCheck, Lock, AlertCircle, ArrowRight, CheckCircle2, ShieldCheck, FileText, RefreshCw } from 'lucide-react';
 import { OrganizerAccount, MomoNetwork } from '../../types';
-import { store } from '../../lib/store';
+import { signInOrganizer, signUpOrganizer, sendOrganizerPasswordReset, updateOrganizerPassword } from '../../lib/auth';
 import { OrganizerTermsModal } from '../legal/OrganizerTermsModal';
 
 interface OrganizerAuthProps {
@@ -15,7 +15,7 @@ export const OrganizerAuth: React.FC<OrganizerAuthProps> = ({
   onBackToHome,
   initialMode = 'login',
 }) => {
-  const [mode, setMode] = useState<'login' | 'signup' | 'forgot'>(initialMode);
+  const [mode, setMode] = useState<'login' | 'signup' | 'forgot' | 'reset'>(() => typeof window !== 'undefined' && window.location.hash.includes('type=recovery') ? 'reset' : initialMode);
 
   // Login State
   const [loginEmail, setLoginEmail] = useState('');
@@ -31,6 +31,8 @@ export const OrganizerAuth: React.FC<OrganizerAuthProps> = ({
 
   // Forgot Password State
   const [forgotEmail, setForgotEmail] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
 
   // Status & Errors
   const [error, setError] = useState<string | null>(null);
@@ -38,23 +40,21 @@ export const OrganizerAuth: React.FC<OrganizerAuthProps> = ({
   const [loading, setLoading] = useState(false);
   const [showTermsModal, setShowTermsModal] = useState(false);
 
-  const handleLoginSubmit = (e: React.FormEvent) => {
+  const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setSuccessMsg(null);
     setLoading(true);
 
-    const result = store.loginOrganizer(loginEmail, loginPassword);
-    setLoading(false);
-
-    if (result.success && result.organizer) {
-      onLoginSuccess(result.organizer);
-    } else {
-      setError(result.message);
-    }
+    try {
+      const result = await signInOrganizer(loginEmail, loginPassword);
+      if (result.success && result.organizer) onLoginSuccess(result.organizer);
+      else setError(result.message);
+    } catch { setError('Unable to sign in right now. Please try again.'); }
+    finally { setLoading(false); }
   };
 
-  const handleSignupSubmit = (e: React.FormEvent) => {
+  const handleSignupSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setSuccessMsg(null);
@@ -66,7 +66,8 @@ export const OrganizerAuth: React.FC<OrganizerAuthProps> = ({
 
     setLoading(true);
 
-    const result = store.registerOrganizer({
+    try {
+    const result = await signUpOrganizer({
       organizationName: signupOrgName,
       email: signupEmail,
       password: signupPassword,
@@ -76,35 +77,44 @@ export const OrganizerAuth: React.FC<OrganizerAuthProps> = ({
       agreedToTerms,
     });
 
-    setLoading(false);
-
-    if (result.success && result.organizer) {
-      onLoginSuccess(result.organizer);
-    } else {
-      setError(result.message);
-    }
+    if (result.success && result.organizer) onLoginSuccess(result.organizer);
+    else if (result.success) setSuccessMsg(result.message);
+    else setError(result.message);
+    } catch { setError('Unable to create your account right now. Please try again.'); }
+    finally { setLoading(false); }
   };
 
-  const handleForgotSubmit = (e: React.FormEvent) => {
+  const handleForgotSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setSuccessMsg(null);
     setLoading(true);
 
-    const result = store.resetOrganizerPassword(forgotEmail);
-    setLoading(false);
-
-    if (result.success) {
-      setSuccessMsg(result.message);
-    } else {
-      setError(result.message);
-    }
+    try {
+      const result = await sendOrganizerPasswordReset(forgotEmail);
+      if (result.success) setSuccessMsg(result.message); else setError(result.message);
+    } catch { setError('Unable to send a reset email right now. Please try again.'); }
+    finally { setLoading(false); }
   };
 
-  const handleDemoFill = (email: string) => {
-    setLoginEmail(email);
-    setLoginPassword('demo123');
-    setMode('login');
+  const handlePasswordUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setSuccessMsg(null);
+    if (newPassword.length < 8) { setError('Use a password with at least 8 characters.'); return; }
+    if (newPassword !== confirmNewPassword) { setError('The passwords do not match.'); return; }
+    setLoading(true);
+    try {
+      const result = await updateOrganizerPassword(newPassword);
+      if (result.success) {
+        setSuccessMsg(result.message);
+        setNewPassword('');
+        setConfirmNewPassword('');
+        setMode('login');
+        window.history.replaceState({}, '', window.location.pathname + window.location.search);
+      } else setError(result.message);
+    } catch { setError('Password could not be updated. Request a fresh reset email and try again.'); }
+    finally { setLoading(false); }
   };
 
   return (
@@ -361,6 +371,23 @@ export const OrganizerAuth: React.FC<OrganizerAuthProps> = ({
           </form>
         )}
 
+        {/* MODE: SET A NEW PASSWORD AFTER EMAIL RECOVERY */}
+        {mode === 'reset' && (
+          <form onSubmit={handlePasswordUpdate} className="space-y-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5">New password</label>
+              <input type="password" required minLength={8} autoComplete="new-password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className="w-full min-h-[44px] px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5">Confirm new password</label>
+              <input type="password" required minLength={8} autoComplete="new-password" value={confirmNewPassword} onChange={(e) => setConfirmNewPassword(e.target.value)} className="w-full min-h-[44px] px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900" />
+            </div>
+            <button type="submit" disabled={loading} className="w-full min-h-[44px] py-3 bg-slate-900 hover:bg-black text-white font-bold text-xs rounded-xl disabled:opacity-50">
+              {loading ? 'Updating password…' : 'Update password'}
+            </button>
+          </form>
+        )}
+
         {/* MODE 3: FORGOT PASSWORD */}
         {mode === 'forgot' && (
           <form onSubmit={handleForgotSubmit} className="space-y-4">
@@ -389,7 +416,7 @@ export const OrganizerAuth: React.FC<OrganizerAuthProps> = ({
                 </>
               ) : (
                 <>
-                  Send Reset Link &amp; Temporary Passcode <ArrowRight className="w-4 h-4" />
+                  Send Password Reset Email <ArrowRight className="w-4 h-4" />
                 </>
               )}
             </button>

@@ -17,6 +17,7 @@ import { TrustBadgeModal } from './components/TrustBadgeModal';
 import { FloatingQuickAction } from './components/voter/FloatingQuickAction';
 import { UserRole, OrganizerAccount } from './types';
 import { store } from './lib/store';
+import { checkCurrentSession, signOutUser } from './lib/auth';
 
 export default function App() {
   const [currentRole, setCurrentRole] = useState<UserRole>('voter');
@@ -25,19 +26,47 @@ export default function App() {
   const [isTrustModalOpen, setIsTrustModalOpen] = useState(false);
   const [isSignInModalOpen, setIsSignInModalOpen] = useState(false);
   const [isDark, setIsDark] = useState<boolean>(false);
+  const [paymentNotice, setPaymentNotice] = useState<{ status: 'success' | 'failed'; receipt?: string } | null>(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const payment = params.get('payment');
+    if (payment === 'success' || payment === 'failed') {
+      setPaymentNotice({ status: payment, receipt: params.get('receipt') || params.get('reference') || undefined });
+      params.delete('payment');
+      params.delete('receipt');
+      const query = params.toString();
+      window.history.replaceState({}, '', window.location.pathname + (query ? '?' + query : '') + window.location.hash);
+    }
+  }, []);
 
   // Portal Tab navigation states
   const [activeAdminTab, setActiveAdminTab] = useState<AdminTab>('overview');
   const [activeOrganizerTab, setActiveOrganizerTab] = useState<OrganizerTab>('dashboard');
 
   // Authentication States (Blocked until logged in)
-  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState<boolean>(() => {
-    try {
-      return sessionStorage.getItem('steeze_admin_auth') === 'true';
-    } catch {
-      return false;
-    }
-  });
+  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
+
+  // Admin access is derived from the active Supabase Auth session and database role,
+  // never from a client-controlled sessionStorage flag.
+  useEffect(() => {
+    let active = true;
+    checkCurrentSession()
+      .then((session) => {
+        if (active) {
+          setIsAdminAuthenticated(session.isAdmin);
+          setCurrentOrganizer(session.organizer);
+          if (session.isAdmin) void store.fetchAdminDataFromSupabase();
+          else if (session.organizer) void store.fetchOrganizerDataFromSupabase(session.organizer.id);
+        }
+      })
+      .catch(() => {
+        if (active) setIsAdminAuthenticated(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const [currentOrganizer, setCurrentOrganizer] = useState<OrganizerAccount | null>(() => {
     try {
@@ -247,6 +276,14 @@ export default function App() {
 
       {/* Main View Container with top padding to prevent fixed navbar from hiding content */}
       <main className="flex-1 pt-16">
+        {paymentNotice && (
+          <div role="status" className={`mx-auto mt-4 max-w-4xl rounded-xl border px-4 py-3 text-sm ${paymentNotice.status === 'success' ? 'border-emerald-200 bg-emerald-50 text-emerald-900' : 'border-rose-200 bg-rose-50 text-rose-900'}`}>
+            {paymentNotice.status === 'success'
+              ? `Paystack confirms payment. Your vote was recorded. Receipt: ${paymentNotice.receipt || 'check your payment email'}.`
+              : `Paystack did not confirm the payment. No votes were credited. If you were charged, contact support with reference: ${paymentNotice.receipt || 'not provided'}.`}
+            <button type="button" className="ml-3 font-semibold underline" onClick={() => setPaymentNotice(null)}>Dismiss</button>
+          </div>
+        )}
         {systemSettings.maintenanceMode && activeView !== 'admin' && activeView !== 'rss-admin' ? (
           <div className="min-h-[70vh] flex items-center justify-center p-6 text-center">
             <div className="max-w-md bg-white rounded-2xl border border-slate-200 p-8 shadow-sm space-y-4 text-slate-900">
@@ -378,9 +415,7 @@ export default function App() {
                 <AdminLogin
                   onLoginSuccess={() => {
                     setIsAdminAuthenticated(true);
-                    try {
-                      sessionStorage.setItem('steeze_admin_auth', 'true');
-                    } catch {}
+                    void store.fetchAdminDataFromSupabase();
                   }}
                   onBackToHome={() => navigateToView('home', 'voter')}
                 />
@@ -399,9 +434,7 @@ export default function App() {
                   onBackToHome={() => navigateToView('home', 'voter')}
                   onLogout={() => {
                     setIsAdminAuthenticated(false);
-                    try {
-                      sessionStorage.removeItem('steeze_admin_auth');
-                    } catch {}
+                    void signOutUser();
                   }}
                 />
               )
