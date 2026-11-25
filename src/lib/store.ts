@@ -810,8 +810,15 @@ class AppStore {
     this.saveState();
   }
 
-  // OTP Handling (Rate limited, 6-digit SMS simulation)
+  // OTP Handling. The in-memory OTP below is development-only and must never
+  // be presented as a real SMS verification flow in a configured deployment.
   sendOtp(phone: string, contestId: string): { success: boolean; message: string; simulatedOtp?: string } {
+    if (isSupabaseConfigured()) {
+      return {
+        success: false,
+        message: 'Phone verification is not available yet. Please try again later.',
+      };
+    }
     const cleanPhone = (phone || '').replace(/[^0-9]/g, '');
     if (cleanPhone.length < 9) {
       return { success: false, message: 'Please enter a valid 9 or 10 digit Ghanaian phone number.' };
@@ -972,19 +979,34 @@ class AppStore {
     const receiptCode = generateReceiptCode();
     const reference = paystackReference || `PAYSTACK-${receiptCode}-${Date.now()}`;
 
-    // If Supabase is configured, call confirm_paystack_vote RPC
+    // Paid votes must be verified server-side by Paystack before a transaction
+    // or vote is recorded. The legacy RPC is not present in the current schema,
+    // so fail closed rather than treating a client callback as proof of payment.
     if (isSupabaseConfigured()) {
       try {
-        const { error: rpcError } = await supabase.rpc('confirm_paystack_vote', {
+        const { data: verificationResult, error: rpcError } = await supabase.rpc('confirm_paystack_vote', {
           p_paystack_reference: reference,
         });
 
-        if (rpcError) {
-          console.warn('confirm_paystack_vote RPC notice:', rpcError.message);
+        if (rpcError || !verificationResult || verificationResult.success !== true) {
+          console.error('Paid vote verification failed:', rpcError?.message || 'No verified payment result');
+          return {
+            success: false,
+            message: 'Payment confirmation is not available yet. Your vote has not been recorded. If you were charged, contact support with your Paystack reference.',
+          };
         }
       } catch (err) {
-        console.warn('Supabase confirm_paystack_vote RPC execution warning:', err);
+        console.error('Paid vote verification failed:', err);
+        return {
+          success: false,
+          message: 'Payment confirmation is temporarily unavailable. Your vote has not been recorded.',
+        };
       }
+    } else {
+      return {
+        success: false,
+        message: 'Paid voting is unavailable until the secure payment service is configured.',
+      };
     }
 
     const newTx: Transaction = {
