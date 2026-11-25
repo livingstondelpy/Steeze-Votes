@@ -764,8 +764,10 @@ class AppStore {
 
   async fetchOrganizerDataFromSupabase(organizerId: string): Promise<void> {
     if (!isSupabaseConfigured()) return;
+    await Promise.allSettled([this.fetchContestsFromSupabase(), this.fetchNomineesFromSupabase()]);
+    const contestIds = this.contests.map((c) => c.id);
     const [txResult, payoutResult] = await Promise.all([
-      supabase.from('organizer_transactions_view').select('*').eq('contest_id', this.contests.map((c) => c.id)).order('created_at', { ascending: false }),
+      supabase.from('organizer_transactions_view').select('*').in('contest_id', contestIds).order('created_at', { ascending: false }),
       supabase.from('payout_requests').select('id,contest_id,organizer_id,gross_revenue_ghs,rss_fee_ghs,net_payout_ghs,status,momo_network,momo_number,momo_transaction_ref,requested_at,processed_at,admin_notes').eq('organizer_id', organizerId),
     ]);
     if (!txResult.error && txResult.data) {
