@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { UserCheck, Lock, AlertCircle, ArrowRight, CheckCircle2, ShieldCheck, FileText, RefreshCw } from 'lucide-react';
 import { OrganizerAccount, MomoNetwork } from '../../types';
 import { store } from '../../lib/store';
-import { signInOrganizer, signUpOrganizer, sendOrganizerPasswordReset } from '../../lib/auth';
+import { signInOrganizer, signUpOrganizer, sendOrganizerPasswordReset, updateOrganizerPassword } from '../../lib/auth';
 import { OrganizerTermsModal } from '../legal/OrganizerTermsModal';
 
 interface OrganizerAuthProps {
@@ -16,7 +16,7 @@ export const OrganizerAuth: React.FC<OrganizerAuthProps> = ({
   onBackToHome,
   initialMode = 'login',
 }) => {
-  const [mode, setMode] = useState<'login' | 'signup' | 'forgot'>(initialMode);
+  const [mode, setMode] = useState<'login' | 'signup' | 'forgot' | 'reset'>(() => typeof window !== 'undefined' && window.location.hash.includes('type=recovery') ? 'reset' : initialMode);
 
   // Login State
   const [loginEmail, setLoginEmail] = useState('');
@@ -32,6 +32,8 @@ export const OrganizerAuth: React.FC<OrganizerAuthProps> = ({
 
   // Forgot Password State
   const [forgotEmail, setForgotEmail] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
 
   // Status & Errors
   const [error, setError] = useState<string | null>(null);
@@ -93,6 +95,26 @@ export const OrganizerAuth: React.FC<OrganizerAuthProps> = ({
       const result = await sendOrganizerPasswordReset(forgotEmail);
       if (result.success) setSuccessMsg(result.message); else setError(result.message);
     } catch { setError('Unable to send a reset email right now. Please try again.'); }
+    finally { setLoading(false); }
+  };
+
+  const handlePasswordUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setSuccessMsg(null);
+    if (newPassword.length < 8) { setError('Use a password with at least 8 characters.'); return; }
+    if (newPassword !== confirmNewPassword) { setError('The passwords do not match.'); return; }
+    setLoading(true);
+    try {
+      const result = await updateOrganizerPassword(newPassword);
+      if (result.success) {
+        setSuccessMsg(result.message);
+        setNewPassword('');
+        setConfirmNewPassword('');
+        setMode('login');
+        window.history.replaceState({}, '', window.location.pathname + window.location.search);
+      } else setError(result.message);
+    } catch { setError('Password could not be updated. Request a fresh reset email and try again.'); }
     finally { setLoading(false); }
   };
 
@@ -352,6 +374,23 @@ export const OrganizerAuth: React.FC<OrganizerAuthProps> = ({
                   Create Organizer Account <ArrowRight className="w-4 h-4" />
                 </>
               )}
+            </button>
+          </form>
+        )}
+
+        {/* MODE: SET A NEW PASSWORD AFTER EMAIL RECOVERY */}
+        {mode === 'reset' && (
+          <form onSubmit={handlePasswordUpdate} className="space-y-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5">New password</label>
+              <input type="password" required minLength={8} autoComplete="new-password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className="w-full min-h-[44px] px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5">Confirm new password</label>
+              <input type="password" required minLength={8} autoComplete="new-password" value={confirmNewPassword} onChange={(e) => setConfirmNewPassword(e.target.value)} className="w-full min-h-[44px] px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900" />
+            </div>
+            <button type="submit" disabled={loading} className="w-full min-h-[44px] py-3 bg-slate-900 hover:bg-black text-white font-bold text-xs rounded-xl disabled:opacity-50">
+              {loading ? 'Updating password…' : 'Update password'}
             </button>
           </form>
         )}
