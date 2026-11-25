@@ -14,7 +14,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const paystackSecret = process.env.PAYSTACK_SECRET_KEY || process.env.PAYSTACK_PRIVATE_KEY;
   if (!supabaseUrl || !serviceKey || !paystackSecret || !appUrl) return json(res, 503, { error: 'Secure payment service is not fully configured.' });
 
-  const { contestId, nomineeId, voteCount, voterPhone, momoNetwork, email } = (req.body || {}) as Record<string, unknown>;
+  const { contestId, nomineeId, voteCount, voterPhone, momoNetwork, email, consentedMarketing } = (req.body || {}) as Record<string, unknown>;
   const votes = Number(voteCount);
   const phone = digits(voterPhone);
   const normalizedEmail = String(email || '').trim();
@@ -23,7 +23,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const db = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
-  const { data: contest, error: contestError } = await db.from('contests').select('id,title,contest_type,status,price_per_vote').eq('id', contestId).maybeSingle();
+  const { data: contest, error: contestError } = await db.from('contests').select('id,title,contest_type,status,price_per_vote,collect_voter_contacts').eq('id', contestId).maybeSingle();
   if (contestError || !contest || contest.contest_type !== 'paid' || contest.status !== 'active') return json(res, 400, { error: 'This paid contest is not available for voting.' });
   const { data: nominee, error: nomineeError } = await db.from('nominees').select('id,name,status').eq('id', nomineeId).eq('contest_id', contestId).maybeSingle();
   if (nomineeError || !nominee || nominee.status !== 'active') return json(res, 400, { error: 'The selected nominee is unavailable.' });
@@ -43,7 +43,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const metadata = {
     contest_id: String(contestId), nominee_id: String(nomineeId), vote_count: votes,
     amount_ghs: amountGhs, fee_ghs: feeGhs, voter_phone: phone, momo_network: String(momoNetwork),
-    collect_voter_contacts: false, consented_marketing: false, app: 'steezevotes'
+    collect_voter_contacts: Boolean(contest.collect_voter_contacts), consented_marketing: Boolean(consentedMarketing), app: 'steezevotes'
   };
   const response = await fetch('https://api.paystack.co/transaction/initialize', {
     method: 'POST',
