@@ -907,7 +907,7 @@ class AppStore {
     // Call Supabase RPC cast_free_vote if connected
     if (isSupabaseConfigured()) {
       try {
-        const { error } = await supabase.rpc('cast_free_vote', {
+        const { data, error } = await supabase.rpc('cast_free_vote', {
           p_contest_id: contestId,
           p_nominee_id: nomineeId,
           p_phone: cleanPhone.startsWith('233') ? `+${cleanPhone}` : `+233${cleanPhone.slice(-9)}`,
@@ -915,6 +915,12 @@ class AppStore {
 
         if (error) {
           return { success: false, message: formatRpcVoteError(error) };
+        }
+        if (!data || data.success !== true) {
+          return {
+            success: false,
+            message: typeof data?.error === 'string' ? data.error : 'The vote was not accepted by the voting server.',
+          };
         }
       } catch (rpcErr: any) {
         return { success: false, message: formatRpcVoteError(rpcErr) };
