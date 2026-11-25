@@ -56,6 +56,8 @@ export default function App() {
         if (active) {
           setIsAdminAuthenticated(session.isAdmin);
           setCurrentOrganizer(session.organizer);
+          if (session.isAdmin) void store.fetchAdminDataFromSupabase();
+          else if (session.organizer) void store.fetchOrganizerDataFromSupabase(session.organizer.id);
         }
       })
       .catch(() => {
@@ -413,6 +415,7 @@ export default function App() {
                 <AdminLogin
                   onLoginSuccess={() => {
                     setIsAdminAuthenticated(true);
+                    void store.fetchAdminDataFromSupabase();
                   }}
                   onBackToHome={() => navigateToView('home', 'voter')}
                 />
