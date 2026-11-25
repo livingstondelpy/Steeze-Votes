@@ -92,11 +92,11 @@ export const RssAdminPortal: React.FC<RssAdminPortalProps> = ({
     .reduce((sum, p) => sum + p.netPayoutGhs, 0);
   const totalPendingPayoutsGhs = pendingPayouts.reduce((sum, p) => sum + p.netPayoutGhs, 0);
 
-  const handleUpdatePayout = (payoutId: string, status: PayoutStatus) => {
+  const handleUpdatePayout = async (payoutId: string, status: PayoutStatus) => {
     const ref = payoutRefInputs[payoutId] || undefined;
     const note = payoutNoteInputs[payoutId] || undefined;
-    store.updatePayoutStatus(payoutId, status, ref, note);
-    alert(`Payout request status updated to "${status.toUpperCase()}".`);
+    try { await store.updatePayoutStatus(payoutId, status, ref, note); alert(`Payout request status updated to "${status.toUpperCase()}".`); }
+    catch { alert('Payout status could not be saved. Please try again.'); }
   };
 
   // Platform wide metrics calculation
@@ -109,11 +109,10 @@ export const RssAdminPortal: React.FC<RssAdminPortalProps> = ({
   const totalPlatformVotes = votes.reduce((sum, v) => sum + v.voteCount, 0);
   const unresolvedAnomalies = anomalies.filter((a) => !a.resolved);
 
-  const handleResolveAnomaly = (anomalyId: string) => {
+  const handleResolveAnomaly = async (anomalyId: string) => {
     if (!anomalyResolutionNote.trim()) return;
-    store.resolveAnomaly(anomalyId, anomalyResolutionNote);
-    setAnomalyResolutionNote('');
-    setSelectedAnomalyId(null);
+    try { await store.resolveAnomaly(anomalyId, anomalyResolutionNote); setAnomalyResolutionNote(''); setSelectedAnomalyId(null); }
+    catch { alert('Anomaly resolution could not be saved. Please try again.'); }
   };
 
   const handleFreezeContest = (contestId: string) => {
