@@ -16,6 +16,7 @@ import {
 import confetti from 'canvas-confetti';
 import { Nominee, Contest, BundleTier, MomoNetwork, VoteRecord, Transaction } from '../../types';
 import { store, calculatePaystackFee } from '../../lib/store';
+import { isSupabaseConfigured } from '../../lib/supabase';
 
 interface PaidVoteModalProps {
   nominee: Nominee;
@@ -82,6 +83,15 @@ export const PaidVoteModal: React.FC<PaidVoteModalProps> = ({
     const clean = voterPhone.replace(/[^0-9]/g, '');
     if (clean.length < 9) {
       setError('Please enter a valid 9 or 10-digit Ghanaian mobile number (e.g., 0244123456).');
+      return;
+    }
+
+    // This UI previously simulated MoMo approval and could display a false
+    // payment flow. Keep paid voting disabled until a real server-side Paystack
+    // initialize + verify endpoint is implemented and configured.
+    const isProduction = (import.meta as any).env?.PROD === true;
+    if (isProduction || isSupabaseConfigured()) {
+      setError('Paid voting is temporarily unavailable while secure Paystack checkout is being configured. You will not be charged or credited from this screen.');
       return;
     }
 
