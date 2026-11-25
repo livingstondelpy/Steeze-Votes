@@ -1303,13 +1303,13 @@ class AppStore {
   }
 
   // Anomaly & Admin Controls
-  resolveAnomaly(anomalyId: string, actionTaken: string) {
-    this.anomalies = this.anomalies.map((a) => {
-      if (a.id === anomalyId) {
-        return { ...a, resolved: true, actionTaken };
-      }
-      return a;
-    });
+  async resolveAnomaly(anomalyId: string, actionTaken: string) {
+    if (isProductionRuntime() && !isSupabaseConfigured()) throw new Error('Database configuration is required to resolve anomalies.');
+    if (isSupabaseConfigured()) {
+      const { error } = await supabase.from('anomalies').update({ reviewed: true, admin_notes: actionTaken, reviewed_at: new Date().toISOString() }).eq('id', anomalyId);
+      if (error) throw new Error('Anomaly resolution could not be saved.');
+    }
+    this.anomalies = this.anomalies.map((item) => item.id === anomalyId ? { ...item, resolved: true, actionTaken } : item);
     this.saveState();
   }
 
@@ -1330,83 +1330,62 @@ class AppStore {
   }
 
   // Payout Management Methods
-  requestPayout(contestId: string, organizerId: string): { success: boolean; message: string; payout?: PayoutRequest } {
+  async requestPayout(contestId: string, organizerId: string): Promise<{ success: boolean; message: string; payout?: PayoutRequest }> {
     const contest = this.contests.find((c) => c.id === contestId);
-    if (!contest) {
-      return { success: false, message: 'Contest not found.' };
-    }
-
+    if (!contest) return { success: false, message: 'Contest not found.' };
     const org = this.organizers.find((o) => o.id === organizerId);
-    if (!org) {
-      return { success: false, message: 'Organizer record not found.' };
-    }
-
-    // Check if contest has ended
+    if (!org) return { success: false, message: 'Organizer record not found.' };
     const isEnded = new Date(contest.endDate).getTime() <= Date.now() || contest.status === 'ended' || contest.status === 'settled';
-    if (!isEnded) {
-      return { success: false, message: 'Payout requests can only be submitted after the contest voting window has ended.' };
+    if (!isEnded) return { success: false, message: 'Payout requests can only be submitted after the contest voting window has ended.' };
+    if (isProductionRuntime() && !isSupabaseConfigured()) return { success: false, message: 'Payout storage is not configured. No request was created.' };
+    let grossGmv = 0;
+    if (isSupabaseConfigured()) {
+      const { data: existingRows, error: existingError } = await supabase.from('payout_requests').select('id,status').eq('contest_id', contestId).in('status', ['pending', 'processing', 'paid']);
+      if (existingError) return { success: false, message: 'Could not check existing payout requests.' };
+      if (existingRows?.length) return { success: false, message: `A payout request is already ${existingRows[0].status} for this contest.` };
+      const { data: txRows, error: txError } = await supabase.from('transactions').select('amount_ghs').eq('contest_id', contestId).eq('status', 'success');
+      if (txError) return { success: false, message: 'Could not calculate verified contest revenue.' };
+      grossGmv = (txRows || []).reduce((sum: number, row: any) => sum + Number(row.amount_ghs || 0), 0);
+    } else {
+      const existing = this.payoutRequests.find((p) => p.contestId === contestId && ['pending', 'processing', 'paid'].includes(p.status));
+      if (existing) return { success: false, message: `A payout request is already ${existing.status} for this contest.` };
+      grossGmv = this.transactions.filter((t) => t.contestId === contestId && t.status === 'success').reduce((sum, t) => sum + t.amountGhs, 0);
     }
-
-    // Check if payout already exists
-    const existing = this.payoutRequests.find((p) => p.contestId === contestId && (p.status === 'pending' || p.status === 'processing' || p.status === 'paid'));
-    if (existing) {
-      return { success: false, message: `A payout request is already ${existing.status} for this contest.` };
-    }
-
-    const contestTxs = this.transactions.filter((t) => t.contestId === contestId && t.status === 'success');
-    const grossGmv = contestTxs.reduce((sum, t) => sum + t.amountGhs, 0);
     const commissionRate = this.systemSettings.defaultCommissionRate || 0.10;
     const rssFee = +(grossGmv * commissionRate).toFixed(2);
     const netPayout = +(grossGmv * (1 - commissionRate)).toFixed(2);
-
-    const newPayout: PayoutRequest = {
-      id: `pay-req-${Date.now()}`,
-      contestId: contest.id,
-      contestTitle: contest.title,
-      organizerId: org.id,
-      organizerName: org.organizationName,
-      momoNetwork: org.momoNetwork || 'MTN',
-      momoNumber: org.momoNumber || org.contactPhone,
-      grossRevenueGhs: grossGmv,
-      rssFeeGhs: rssFee,
-      netPayoutGhs: netPayout,
-      status: 'pending',
-      requestedAt: new Date().toISOString(),
-      adminNotes: 'Submitted by organizer for 24-hour review.',
-    };
-
+    const id = crypto.randomUUID();
+    const newPayout: PayoutRequest = { id, contestId: contest.id, contestTitle: contest.title, organizerId: org.id, organizerName: org.organizationName, momoNetwork: org.momoNetwork || 'MTN', momoNumber: org.momoNumber || org.contactPhone, grossRevenueGhs: grossGmv, rssFeeGhs: rssFee, netPayoutGhs: netPayout, status: 'pending', requestedAt: new Date().toISOString(), adminNotes: 'Submitted by organizer for review.' };
+    if (isSupabaseConfigured()) {
+      const { error } = await supabase.from('payout_requests').insert({ id, contest_id: contest.id, organizer_id: org.id, gross_revenue_ghs: grossGmv, rss_fee_ghs: rssFee, net_payout_ghs: netPayout, status: 'pending', momo_network: org.momoNetwork || 'MTN', momo_number: org.momoNumber || org.contactPhone, held_for_dispute: false });
+      if (error) return { success: false, message: 'Payout request could not be saved. No request was created.' };
+    }
     this.payoutRequests.unshift(newPayout);
-    this.updateContest(contestId, { payoutStatus: 'pending' });
+    await this.updateContest(contestId, { payoutStatus: 'pending' });
     this.saveState();
-
-    return { 
-      success: true, 
-      message: `Payout request of GHS ${netPayout.toFixed(2)} submitted successfully to your ${org.momoNetwork} MoMo wallet.`, 
-      payout: newPayout 
-    };
+    return { success: true, message: `Payout request of GHS ${netPayout.toFixed(2)} submitted for review.`, payout: newPayout };
   }
 
-  updatePayoutStatus(
-    payoutId: string, 
-    status: PayoutStatus, 
-    momoTransactionRef?: string, 
-    adminNotes?: string
-  ) {
-    const payout = this.payoutRequests.find((p) => p.id === payoutId);
-    if (!payout) return;
-
+  async updatePayoutStatus(payoutId: string, status: PayoutStatus, momoTransactionRef?: string, adminNotes?: string) {
+    const payout = this.payoutRequests.find((item) => item.id === payoutId);
+    if (!payout) throw new Error('Payout request not found.');
+    if (isProductionRuntime() && !isSupabaseConfigured()) throw new Error('Database configuration is required to update payouts.');
+    if (isSupabaseConfigured()) {
+      const dbUpdates: Record<string, unknown> = { status };
+      if (momoTransactionRef) dbUpdates.momo_transaction_ref = momoTransactionRef;
+      if (adminNotes) dbUpdates.admin_notes = adminNotes;
+      if (status === 'paid') dbUpdates.processed_at = new Date().toISOString();
+      const { error } = await supabase.from('payout_requests').update(dbUpdates).eq('id', payoutId);
+      if (error) throw new Error('Payout status could not be saved.');
+    }
     payout.status = status;
-    if (momoTransactionRef) {
-      payout.momoTransactionRef = momoTransactionRef;
-    }
-    if (adminNotes) {
-      payout.adminNotes = adminNotes;
-    }
+    if (momoTransactionRef) payout.momoTransactionRef = momoTransactionRef;
+    if (adminNotes) payout.adminNotes = adminNotes;
     if (status === 'paid') {
       payout.processedAt = new Date().toISOString();
-      this.updateContest(payout.contestId, { escrowReleased: true, payoutStatus: 'paid', status: 'settled' });
+      await this.updateContest(payout.contestId, { escrowReleased: true, payoutStatus: 'paid', status: 'settled' });
     } else {
-      this.updateContest(payout.contestId, { payoutStatus: status });
+      await this.updateContest(payout.contestId, { payoutStatus: status });
     }
     this.saveState();
   }
