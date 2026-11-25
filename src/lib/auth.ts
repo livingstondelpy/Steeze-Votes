@@ -90,14 +90,27 @@ export async function signInOrganizer(
       return { success: false, message: `Failed to load organizer profile: ${orgError.message}` };
     }
 
-    if (!orgRow) {
-      return {
-        success: false,
-        message: 'No organizer profile found matching your authenticated user ID.',
-      };
+    let resolvedOrg = orgRow;
+    if (!resolvedOrg) {
+      const metadata = data.user.user_metadata || {};
+      if (metadata.organization_name && metadata.contact_phone && metadata.momo_number && metadata.momo_network) {
+        const { data: created, error: createError } = await supabase.from('organizers').upsert({
+          id: data.user.id,
+          email: data.user.email || email.trim().toLowerCase(),
+          organization_name: metadata.organization_name,
+          contact_phone: metadata.contact_phone,
+          momo_number: metadata.momo_number,
+          momo_network: metadata.momo_network,
+          status: 'approved',
+        }).select('*').single();
+        if (createError || !created) return { success: false, message: 'Your login is valid, but your organizer profile could not be saved. Contact support.' };
+        resolvedOrg = created;
+      } else {
+        return { success: false, message: 'No organizer profile found matching your authenticated user ID.' };
+      }
     }
 
-    if (orgRow.status === 'suspended') {
+    if (resolvedOrg.status === 'suspended') {
       await supabase.auth.signOut();
       return {
         success: false,
@@ -106,16 +119,16 @@ export async function signInOrganizer(
     }
 
     const organizer: OrganizerAccount = {
-      id: orgRow.id,
-      email: orgRow.email,
-      organizationName: orgRow.organization_name,
-      contactPhone: orgRow.contact_phone,
-      momoNumber: orgRow.momo_number,
-      momoNetwork: orgRow.momo_network,
-      status: orgRow.status,
-      profilePictureUrl: orgRow.profile_picture_url || undefined,
-      bio: orgRow.bio || undefined,
-      createdAt: orgRow.created_at,
+      id: resolvedOrg.id,
+      email: resolvedOrg.email,
+      organizationName: resolvedOrg.organization_name,
+      contactPhone: resolvedOrg.contact_phone,
+      momoNumber: resolvedOrg.momo_number,
+      momoNetwork: resolvedOrg.momo_network,
+      status: resolvedOrg.status,
+      profilePictureUrl: resolvedOrg.profile_picture_url || undefined,
+      bio: resolvedOrg.bio || undefined,
+      createdAt: resolvedOrg.created_at,
     };
 
     return { success: true, message: 'Organizer authenticated successfully', organizer };
@@ -145,6 +158,7 @@ export async function signUpOrganizer(params: {
     const { data, error } = await supabase.auth.signUp({
       email: cleanEmail,
       password: params.password,
+      options: { data: { organization_name: params.organizationName.trim(), contact_phone: params.contactPhone.trim(), momo_number: params.momoNumber.trim(), momo_network: params.momoNetwork } },
     });
 
     if (error) {
@@ -153,6 +167,9 @@ export async function signUpOrganizer(params: {
 
     if (!data.user) {
       return { success: false, message: 'Signup failed to create user.' };
+    }
+    if (!data.session) {
+      return { success: true, message: 'Account created. Check your email to confirm the address, then sign in to finish setting up your organizer profile.' };
     }
 
     // Insert organizer profile in public.organizers
@@ -203,6 +220,15 @@ export async function signUpOrganizer(params: {
   } catch (err: any) {
     return { success: false, message: err?.message || 'Failed to complete organizer registration.' };
   }
+}
+
+export async function sendOrganizerPasswordReset(email: string): Promise<{ success: boolean; message: string }> {
+  if (!isSupabaseConfigured()) return { success: false, message: 'Password reset is unavailable because Supabase is not configured.' };
+  const cleanEmail = email.trim().toLowerCase();
+  if (!cleanEmail) return { success: false, message: 'Please enter your account email address.' };
+  const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, { redirectTo: window.location.origin + '/organizer' });
+  if (error) return { success: false, message: 'Unable to send a password reset email right now. Please try again.' };
+  return { success: true, message: 'If this email is registered, Supabase will send password reset instructions. Check your inbox and spam folder.' };
 }
 
 /**
