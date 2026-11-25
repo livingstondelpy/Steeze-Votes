@@ -16,7 +16,6 @@ import {
 import confetti from 'canvas-confetti';
 import { Nominee, Contest, BundleTier, MomoNetwork, VoteRecord, Transaction } from '../../types';
 import { store, calculatePaystackFee } from '../../lib/store';
-import { isSupabaseConfigured } from '../../lib/supabase';
 
 interface PaidVoteModalProps {
   nominee: Nominee;
@@ -53,6 +52,7 @@ export const PaidVoteModal: React.FC<PaidVoteModalProps> = ({
   // Step 2: Voter Verification & MoMo provider
   const [momoNetwork, setMomoNetwork] = useState<MomoNetwork>('MTN');
   const [voterPhone, setVoterPhone] = useState('');
+  const [voterEmail, setVoterEmail] = useState('');
   const [consentedMarketing, setConsentedMarketing] = useState(false);
   
   // Checkout flow state: 1: bundle, 2: momo details, 3: ussd prompt / approval
@@ -76,26 +76,21 @@ export const PaidVoteModal: React.FC<PaidVoteModalProps> = ({
     setStep('checkout');
   };
 
-  const handleInitiatePayment = (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-
+  const handleInitiatePayment = async (e: React.FormEvent) => {
+    e.preventDefault(); setError(null);
     const clean = voterPhone.replace(/[^0-9]/g, '');
-    if (clean.length < 9) {
-      setError('Please enter a valid 9 or 10-digit Ghanaian mobile number (e.g., 0244123456).');
-      return;
-    }
-
-    // This UI previously simulated MoMo approval and could display a false
-    // payment flow. Keep paid voting disabled until a real server-side Paystack
-    // initialize + verify endpoint is implemented and configured.
-    const isProduction = (import.meta as any).env?.PROD === true;
-    if (isProduction || isSupabaseConfigured()) {
-      setError('Paid voting is temporarily unavailable while secure Paystack checkout is being configured. You will not be charged or credited from this screen.');
-      return;
-    }
-
-    setStep('processing');
+    if (clean.length < 9 || clean.length > 15) { setError('Please enter a valid mobile number.'); return; }
+    if (!/^\S+@\S+\.\S+$/.test(voterEmail.trim())) { setError('Enter a valid email address for your Paystack receipt.'); return; }
+    setLoading(true);
+    try {
+      const response = await fetch('/api/paystack/initialize', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contestId: contest.id, nomineeId: nominee.id, voteCount: activeVotes, voterPhone: clean, momoNetwork, email: voterEmail.trim(), consentedMarketing }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || !payload.authorizationUrl) throw new Error(payload.error || 'Secure checkout could not be started.');
+      window.location.assign(payload.authorizationUrl);
+    } catch (err: unknown) { setError(err instanceof Error ? err.message : 'Secure checkout could not be started.'); setLoading(false); }
   };
 
   const handleSimulateMoMoApproval = () => {
@@ -345,7 +340,12 @@ export const PaidVoteModal: React.FC<PaidVoteModalProps> = ({
               </div>
             </div>
 
-            {/* Voter Phone Input */}
+            {/* Payment receipt email */}
+            <div className="space-y-1">
+              <label className="text-[11px] text-slate-600 block">Email address for payment receipt:</label>
+              <input type="email" required value={voterEmail} onChange={(e) => setVoterEmail(e.target.value)} placeholder="you@example.com" autoComplete="email" className="w-full px-3 py-2 rounded-lg bg-slate-50 border border-slate-200 text-slate-900 text-xs sm:text-sm focus:outline-none focus:border-rose-500 focus:bg-white" />
+            </div>
+{/* Voter Phone Input */}
             <div className="space-y-1">
               <label className="text-[11px] text-slate-600 block">
                 Ghanaian Mobile Number (for USSD approval prompt):
@@ -401,9 +401,9 @@ export const PaidVoteModal: React.FC<PaidVoteModalProps> = ({
               </button>
               <button
                 type="submit"
-                className="flex-1 py-2 px-4 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-medium text-xs shadow-2xs transition-colors flex items-center justify-center gap-1.5 active:scale-98"
+                disabled={loading} className="flex-1 py-2 px-4 rounded-lg bg-rose-600 hover:bg-rose-700 disabled:opacity-60 text-white font-medium text-xs shadow-2xs transition-colors flex items-center justify-center gap-1.5 active:scale-98"
               >
-                <Lock className="w-3.5 h-3.5" /> Pay GHC {totalChargedGhs.toFixed(2)}
+                {loading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Lock className="w-3.5 h-3.5" />} {loading ? "Connecting to Paystack…" : "Pay GHC"} {totalChargedGhs.toFixed(2)}
               </button>
             </div>
           </form>
