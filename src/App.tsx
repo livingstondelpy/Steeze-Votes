@@ -32,7 +32,7 @@ export default function App() {
     const params = new URLSearchParams(window.location.search);
     const payment = params.get('payment');
     if (payment === 'success' || payment === 'failed') {
-      setPaymentNotice({ status: payment, receipt: params.get('receipt') || undefined });
+      setPaymentNotice({ status: payment, receipt: params.get('receipt') || params.get('reference') || undefined });
       params.delete('payment');
       params.delete('receipt');
       const query = params.toString();
@@ -275,7 +275,7 @@ export default function App() {
           <div role="status" className={`mx-auto mt-4 max-w-4xl rounded-xl border px-4 py-3 text-sm ${paymentNotice.status === 'success' ? 'border-emerald-200 bg-emerald-50 text-emerald-900' : 'border-rose-200 bg-rose-50 text-rose-900'}`}>
             {paymentNotice.status === 'success'
               ? `Paystack confirms payment. Your vote was recorded. Receipt: ${paymentNotice.receipt || 'check your payment email'}.`
-              : 'Paystack did not confirm the payment. No votes were credited. If you were charged, contact support with your Paystack reference.'}
+              : `Paystack did not confirm the payment. No votes were credited. If you were charged, contact support with reference: ${paymentNotice.receipt || 'not provided'}.`}
             <button type="button" className="ml-3 font-semibold underline" onClick={() => setPaymentNotice(null)}>Dismiss</button>
           </div>
         )}
