@@ -607,7 +607,7 @@ class AppStore {
       if (!error && data) {
         this.contests = data.map((c: any) => ({
           id: c.id,
-          slug: c.slug,
+          slug: c.slug || c.id,
           organizerId: c.organizer_id,
           organizerName: c.organizers?.organization_name || 'Event Organizer',
           title: c.title,
@@ -630,7 +630,6 @@ class AppStore {
             discountPercentage: b.discount_percentage,
             badge: b.badge,
             popular: b.popular,
-            label: b.label || `${b.votes} Votes`,
             createdAt: b.created_at,
           })),
           showPublic: c.show_public ?? true,
@@ -1031,7 +1030,7 @@ class AppStore {
 
   // Organizer contest creation & management
   async createContest(contestData: Omit<Contest, 'id' | 'createdAt' | 'updatedAt' | 'escrowReleased'>): Promise<Contest> {
-    const id = `contest-${Date.now()}`;
+    const id = crypto.randomUUID();
     // Free contests must store NULL in price_per_vote
     const safePricePerVote = contestData.contestType === 'free' ? null : contestData.pricePerVote;
 
@@ -1052,7 +1051,6 @@ class AppStore {
       try {
         const { error: contestError } = await supabase.from('contests').insert({
           id,
-          slug: contestData.slug || id,
           organizer_id: contestData.organizerId,
           title: contestData.title,
           description: contestData.description,
@@ -1069,7 +1067,6 @@ class AppStore {
           collect_voter_contacts: contestData.collectVoterContacts ?? false,
           status: contestData.status || 'pending_review',
           escrow_released: false,
-          terms_and_conditions: contestData.termsAndConditions || null,
           banner_order: contestData.bannerOrder || 1,
           featured: contestData.featured || false,
         });
@@ -1115,10 +1112,8 @@ class AppStore {
         if (updates.description !== undefined) dbUpdates.description = updates.description;
         if (updates.status !== undefined) dbUpdates.status = updates.status;
         if (updates.showPublic !== undefined) dbUpdates.show_public = updates.showPublic;
-        if (updates.isLockedForAudit !== undefined) dbUpdates.is_locked_for_audit = updates.isLockedForAudit;
         if (updates.escrowReleased !== undefined) dbUpdates.escrow_released = updates.escrowReleased;
         if (updates.payoutStatus !== undefined) dbUpdates.payout_status = updates.payoutStatus;
-        if (updates.termsAndConditions !== undefined) dbUpdates.terms_and_conditions = updates.termsAndConditions;
         if (updates.bannerOrder !== undefined) dbUpdates.banner_order = updates.bannerOrder;
         if (updates.featured !== undefined) dbUpdates.featured = updates.featured;
 
@@ -1137,7 +1132,7 @@ class AppStore {
     contestId: string, 
     nomineeData: Omit<Nominee, 'id' | 'contestId' | 'voteCount' | 'paidVoteCount' | 'freeVoteCount' | 'createdAt'>
   ): Promise<Nominee> {
-    const id = `nom-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
+    const id = crypto.randomUUID();
     const votingCode = nomineeData.votingCode || nomineeData.nomineeCode || `NOM-${Math.floor(100 + Math.random() * 900)}`;
 
     const newNominee: Nominee = {
@@ -1162,7 +1157,6 @@ class AppStore {
           id,
           contest_id: contestId,
           name: nomineeData.name,
-          stage_name: nomineeData.stageName || null,
           photo_url: nomineeData.photoUrl,
           bio: nomineeData.bio,
           voting_code: votingCode,
@@ -1230,23 +1224,33 @@ class AppStore {
     this.updateContest(contestId, { status: 'draft', rejectionReason: reason });
   }
 
-  updateOrganizerProfile(organizerId: string, updates: { profilePictureUrl?: string; bio?: string }) {
-    this.organizers = this.organizers.map((o) => {
-      if (o.id === organizerId) {
-        return { ...o, ...updates };
-      }
-      return o;
-    });
+  async updateOrganizerProfile(organizerId: string, updates: { profilePictureUrl?: string; bio?: string }) {
+    if (isProductionRuntime() && !isSupabaseConfigured()) throw new Error('Database configuration is required to update organizer profiles.');
+    if (isSupabaseConfigured()) {
+      const dbUpdates: Record<string, unknown> = {};
+      if (updates.profilePictureUrl !== undefined) dbUpdates.profile_picture_url = updates.profilePictureUrl;
+      if (updates.bio !== undefined) dbUpdates.bio = updates.bio;
+      const { error } = await supabase.from('organizers').update(dbUpdates).eq('id', organizerId);
+      if (error) throw new Error('Organizer profile could not be saved.');
+    }
+    this.organizers = this.organizers.map((o) => o.id === organizerId ? { ...o, ...updates } : o);
     this.saveState();
   }
 
-  updateNominee(nomineeId: string, updates: Partial<Nominee>) {
-    this.nominees = this.nominees.map((n) => {
-      if (n.id === nomineeId) {
-        return { ...n, ...updates };
-      }
-      return n;
-    });
+  async updateNominee(nomineeId: string, updates: Partial<Nominee>) {
+    if (isProductionRuntime() && !isSupabaseConfigured()) throw new Error('Database configuration is required to update nominees.');
+    if (isSupabaseConfigured()) {
+      const dbUpdates: Record<string, unknown> = {};
+      if (updates.name !== undefined) dbUpdates.name = updates.name;
+      if (updates.votingCode !== undefined || updates.nomineeCode !== undefined) dbUpdates.voting_code = updates.votingCode || updates.nomineeCode;
+      if (updates.category !== undefined) dbUpdates.category = updates.category;
+      if (updates.photoUrl !== undefined) dbUpdates.photo_url = updates.photoUrl;
+      if (updates.bio !== undefined) dbUpdates.bio = updates.bio;
+      if (updates.status !== undefined) dbUpdates.status = updates.status;
+      const { error } = await supabase.from('nominees').update(dbUpdates).eq('id', nomineeId);
+      if (error) throw new Error('Nominee changes could not be saved.');
+    }
+    this.nominees = this.nominees.map((n) => n.id === nomineeId ? { ...n, ...updates } : n);
     this.saveState();
   }
 
