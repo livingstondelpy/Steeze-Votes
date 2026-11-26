@@ -17,6 +17,7 @@ import { TrustBadgeModal } from './components/TrustBadgeModal';
 import { FloatingQuickAction } from './components/voter/FloatingQuickAction';
 import { UserRole, OrganizerAccount } from './types';
 import { store } from './lib/store';
+import { checkCurrentSession } from './lib/auth';
 
 export default function App() {
   const [currentRole, setCurrentRole] = useState<UserRole>('voter');
@@ -31,13 +32,16 @@ export default function App() {
   const [activeOrganizerTab, setActiveOrganizerTab] = useState<OrganizerTab>('dashboard');
 
   // Authentication States (Blocked until logged in)
-  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState<boolean>(() => {
-    try {
-      return sessionStorage.getItem('steeze_admin_auth') === 'true';
-    } catch {
-      return false;
-    }
-  });
+  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState<boolean>(false);
+
+  // Restore administrator access only after validating the Supabase session and admin role.
+  useEffect(() => {
+    let active = true;
+    checkCurrentSession()
+      .then(({ isAdmin }) => { if (active) setIsAdminAuthenticated(isAdmin); })
+      .catch(() => { if (active) setIsAdminAuthenticated(false); });
+    return () => { active = false; };
+  }, []);
 
   const [currentOrganizer, setCurrentOrganizer] = useState<OrganizerAccount | null>(() => {
     try {
