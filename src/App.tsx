@@ -36,6 +36,8 @@ export default function App() {
 
   // Restore administrator access only after validating the Supabase session and admin role.
   useEffect(() => {
+    // Keep recovery links on the reset form; do not redirect a recovery session into the admin console.
+    if (new URLSearchParams(window.location.search).get('reset') === '1') return;
     let active = true;
     checkCurrentSession()
       .then(({ isAdmin }) => { if (active) setIsAdminAuthenticated(isAdmin); })
