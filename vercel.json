@@ -1,0 +1,28 @@
+{
+  "rewrites": [
+    {
+      "source": "/admin",
+      "destination": "/"
+    },
+    {
+      "source": "/admin/:path*",
+      "destination": "/"
+    },
+    {
+      "source": "/rss-admin",
+      "destination": "/"
+    },
+    {
+      "source": "/rss-admin/:path*",
+      "destination": "/"
+    },
+    {
+      "source": "/organizer",
+      "destination": "/"
+    },
+    {
+      "source": "/organizer/:path*",
+      "destination": "/"
+    }
+  ]
+}
